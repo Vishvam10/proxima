@@ -38,7 +38,7 @@ bench: build
 # Python benchmark
 # --------------------------------
 pybench:
-	@cd $(PYTHON_DIR) && $(PYTHON) benchmark_hnswlib.py
+	@cd $(PYTHON_DIR) && $(PYTHON) bench.py
 
 # --------------------------------
 # Clean
