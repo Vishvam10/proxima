@@ -46,13 +46,16 @@ build/
 Build/
 build-*/
 
-# CMake generated files
-CMakeFiles/
-CMakeCache.txt
-cmake_install.cmake
-Makefile
-install_manifest.txt 
-compile_commands.json
+# Build directory
+build/
+
+# CMake generated files (only inside build)
+build/CMakeFiles/
+build/CMakeCache.txt
+build/cmake_install.cmake
+build/Makefile
+build/install_manifest.txt
+build/compile_commands.json
 
 # Temporary files
 *.tmp 
