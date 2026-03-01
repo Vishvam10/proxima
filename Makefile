@@ -3,10 +3,12 @@
 # ================================
 
 BUILD_DIR := build
-PYTHON_DIR := python
+BENCH_DIR := benchmarks
 PYTHON := python3
+VENV_DIR := $(BENCH_DIR)/.venv
+VENV_PYTHON := $(VENV_DIR)/bin/python
 
-.PHONY: all build test bench pybench clean rebuild help
+.PHONY: all build test bench cppbench pybench clean rebuild help
 
 all: build
 
@@ -31,14 +33,27 @@ test: build
 # --------------------------------
 # Run C++ benchmark
 # --------------------------------
-bench: build
+cppbench: build
 	@./$(BUILD_DIR)/bench
 
 # --------------------------------
-# Python benchmark
+# Python benchmark (with venv)
 # --------------------------------
-pybench:
-	@cd $(PYTHON_DIR) && $(PYTHON) bench.py
+$(VENV_PYTHON): $(BENCH_DIR)/requirements.txt
+	@echo "Creating virtual environment in $(VENV_DIR)..."
+	@$(PYTHON) -m venv $(VENV_DIR)
+	@echo "Installing Python benchmark dependencies..."
+	@$(VENV_PYTHON) -m pip install --upgrade pip
+	@$(VENV_PYTHON) -m pip install -r $(BENCH_DIR)/requirements.txt
+
+pybench: $(VENV_PYTHON)
+	@$(VENV_PYTHON) $(BENCH_DIR)/bench.py
+
+# --------------------------------
+# Run both benchmarks and compare
+# --------------------------------
+bench: cppbench pybench
+	@$(VENV_PYTHON) $(BENCH_DIR)/compare.py
 
 # --------------------------------
 # Clean
@@ -54,6 +69,7 @@ rebuild: clean build
 help:
 	@echo "make build    - Build project"
 	@echo "make test     - Run tests"
-	@echo "make bench    - Run C++ benchmark"
-	@echo "make pybench  - Run Python benchmark"
+	@echo "make cppbench - Run C++ benchmark"
+	@echo "make pybench  - Run Python benchmark (in venv)"
+	@echo "make bench    - Run both benchmarks and compare"
 	@echo "make clean    - Clean build"

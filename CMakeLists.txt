@@ -46,7 +46,7 @@ target_compile_options(hnsw PRIVATE -O3)
 # ----------------------------
 
 add_executable(bench
-    bench/bench.cpp
+    benchmarks/bench.cpp
 )
 
 target_link_libraries(bench PRIVATE hnsw)

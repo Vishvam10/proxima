@@ -1,4 +1,5 @@
 #include <chrono>
+#include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <random>
@@ -23,12 +24,21 @@ int main() {
 
     cout << "\n";
     vector<Scenario> scenarios = {
-        {1000, 128, 10}, {5000, 64, 10}, {10000, 32, 5}
+        {1000, 128, 10},
+        {5000, 64, 10},
+        {10000, 32, 5},
+        {50000, 64, 10},
+        {100000, 32, 10}
     };
 
+    // Human-readable table
     cout << std::fixed << std::setprecision(4);
     cout << "Dataset | Dim | K | Build (s) | Query (us) | Recall\n";
     cout << "------------------------------------------------------\n";
+
+    // CSV output for automated comparison
+    std::ofstream csv("benchmarks/cpp_results.csv");
+    csv << "dataset,dim,k,build_s,query_us,recall\n";
 
     std::mt19937 gen(42);
 
@@ -66,6 +76,10 @@ int main() {
 
         cout << s.N << " | " << s.DIM << " | " << s.K << " | " << build_time
              << " | " << query_time << " | " << recall << "\n";
+
+        csv << s.N << "," << s.DIM << "," << s.K << ","
+            << build_time << "," << query_time << "," << recall << "\n";
     }
     cout << "\n";
 }
+
