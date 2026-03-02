@@ -13,6 +13,14 @@ VENV_PYTHON := $(VENV_DIR)/bin/python
 all: build
 
 # --------------------------------
+# Run scrathpad
+# --------------------------------
+scratchpad:
+	@echo "Compiling and running scratchpad..."
+	@clang++ -std=c++17 src/scratchpad.cpp src/hnsw.cpp -Isrc -O3 -o $(BUILD_DIR)/scratchpad
+	@$(BUILD_DIR)/scratchpad
+
+# --------------------------------
 # Build (configure only once)
 # --------------------------------
 build:
