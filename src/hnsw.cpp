@@ -197,14 +197,19 @@ void HnswCPU::add(const vector<float> &embedding) {
     }
 
     size_t curr = entryPoint;
-    for (size_t level = maxLevel; level-- > nodeLevel;) {
+    
+    // Upper greedy routing (skip layers above new node)
+    for (int level = (int)maxLevel; level > (int)nodeLevel; --level) {
         auto ans = searchLayer(embedding, curr, 1, level);
         curr = ans[0];
     }
 
-    for (size_t level = std::min(nodeLevel, maxLevel); level-- > 0;) {
+    // Link layers including 0
+    for (int level = (int)std::min(nodeLevel, maxLevel); level >= 0; --level) {
         size_t maxNeighbors = (level == 0) ? M0 : M;
+
         auto layerNodes = searchLayer(embedding, curr, efConstruction, level);
+
         auto selected = selectNeighborsWithHeuristic(
             embedding, layerNodes, maxNeighbors, level, true, true
         );
@@ -212,8 +217,12 @@ void HnswCPU::add(const vector<float> &embedding) {
         nodes[id].neighbors[level] = selected;
 
         for (size_t nid : selected) {
+            if (nodes[nid].level < (size_t)level)
+                continue;
+
             auto &neighList = nodes[nid].neighbors[level];
             neighList.push_back(id);
+
             if (neighList.size() > maxNeighbors) {
                 neighList = selectNeighborsWithHeuristic(
                     nodes[nid].embedding,
@@ -235,16 +244,19 @@ void HnswCPU::add(const vector<float> &embedding) {
 
 vector<size_t>
 HnswCPU::search(const vector<float> &query, size_t k, size_t efSearch) {
+
     if (nodes.empty())
         return {};
 
     size_t curr = entryPoint;
 
-    for (size_t level = maxLevel; level-- > 0;) {
+    // Greedy descent (skip level 0)
+    for (int level = (int)maxLevel; level > 0; --level) {
         auto ans = searchLayer(query, curr, 1, level);
         curr = ans[0];
     }
 
+    // Full search only at level 0
     auto candidates = searchLayer(query, curr, efSearch, 0);
 
     return selectNeighbors(query, candidates, k);
