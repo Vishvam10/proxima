@@ -27,12 +27,23 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|GNU")
     )
 endif()
 
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "x86_64")
+    add_compile_options(-mavx2 -mfma)
+endif()
+
+if(CMAKE_SYSTEM_PROCESSOR MATCHES "arm64")
+    add_compile_options(-march=armv8-a+simd)
+endif()
+
 # ----------------------------
 # Library
 # ----------------------------
 
+file(GLOB DIST_SOURCES src/dist/*.cpp)
+
 add_library(hnsw
     src/hnsw.cpp
+    ${DIST_SOURCES}
 )
 
 target_include_directories(hnsw

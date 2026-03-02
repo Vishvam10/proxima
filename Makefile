@@ -8,20 +8,24 @@ PYTHON := python3
 VENV_DIR := $(BENCH_DIR)/.venv
 VENV_PYTHON := $(VENV_DIR)/bin/python
 
-.PHONY: all build test bench cppbench pybench clean rebuild help
+# Automatically find all .cpp files inside src
+SRC := $(shell find src -name "*.cpp")
+
+.PHONY: all build test bench cppbench pybench clean rebuild help scratchpad
 
 all: build
 
 # --------------------------------
-# Run scrathpad
+# Run scratchpad
 # --------------------------------
 scratchpad:
 	@echo "Compiling and running scratchpad..."
-	@clang++ -std=c++17 src/scratchpad.cpp src/hnsw.cpp -Isrc -O3 -o $(BUILD_DIR)/scratchpad
+	@mkdir -p $(BUILD_DIR)
+	@clang++ -std=c++17 -O3 -Isrc $(SRC) -o $(BUILD_DIR)/scratchpad
 	@$(BUILD_DIR)/scratchpad
 
 # --------------------------------
-# Build (configure only once)
+# Build (CMake)
 # --------------------------------
 build:
 	@if [ ! -d "$(BUILD_DIR)" ]; then \
@@ -75,9 +79,10 @@ clean:
 rebuild: clean build
 
 help:
-	@echo "make build    - Build project"
-	@echo "make test     - Run tests"
-	@echo "make cppbench - Run C++ benchmark"
-	@echo "make pybench  - Run Python benchmark (in venv)"
-	@echo "make bench    - Run both benchmarks and compare"
-	@echo "make clean    - Clean build"
+	@echo "make build      - Build project (CMake)"
+	@echo "make test       - Run tests"
+	@echo "make cppbench   - Run C++ benchmark"
+	@echo "make pybench    - Run Python benchmark (in venv)"
+	@echo "make bench      - Run both benchmarks and compare"
+	@echo "make scratchpad - Compile and run scratchpad directly"
+	@echo "make clean      - Clean build"

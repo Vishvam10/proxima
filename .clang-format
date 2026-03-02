@@ -11,3 +11,6 @@ AllowAllParametersOfDeclarationOnNextLine: false
 # Force newline after '(' in declarations
 PenaltyBreakBeforeFirstCallParameter: 1
 AlignAfterOpenBracket: BlockIndent
+
+BreakConstructorInitializers: AfterColon
+PackConstructorInitializers: Never
