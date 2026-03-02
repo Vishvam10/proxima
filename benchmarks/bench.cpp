@@ -20,6 +20,11 @@ struct Scenario {
     size_t K;
 };
 
+struct DistConfig {
+    DistanceType type;
+    const char* label;
+};
+
 int main() {
 
     cout << "\n";
@@ -31,57 +36,70 @@ int main() {
         {100000, 32, 10}
     };
 
+    vector<DistConfig> dists = {
+        {DistanceType::L2, "l2"},
+        {DistanceType::L1, "l1"},
+        {DistanceType::COSINE, "cosine"},
+    };
+
     cout << "\nC++ Benchmarks\n\n";
+    printSimdInfo();
+    cout << "\n";
 
     // Human-readable table
     cout << std::fixed << std::setprecision(4);
-    cout << "Dataset | Dim | K | Build (s) | Query (us) | Recall\n";
-    cout << "------------------------------------------------------\n";
+    cout << "Distance | Dataset | Dim | K | Build (s) | Query (us) | Recall\n";
+    cout << "-----------------------------------------------------------------\n";
 
     // CSV output for automated comparison
     std::ofstream csv("benchmarks/cpp_results.csv");
-    csv << "dataset,dim,k,build_s,query_us,recall\n";
+    csv << "distance,dataset,dim,k,build_s,query_us,recall\n";
 
     std::mt19937 gen(42);
 
-    for (auto s : scenarios) {
-        std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+    for (const auto& dcfg : dists) {
+        for (auto s : scenarios) {
+            std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
-        vector<vector<float>> data(s.N, vector<float>(s.DIM));
-        for (size_t i = 0; i < s.N; ++i)
-            for (size_t j = 0; j < s.DIM; ++j)
-                data[i][j] = dist(gen);
+            vector<vector<float>> data(s.N, vector<float>(s.DIM));
+            for (size_t i = 0; i < s.N; ++i)
+                for (size_t j = 0; j < s.DIM; ++j)
+                    data[i][j] = dist(gen);
 
-        HnswCPU index(16, 200);
+            HnswCPU index(16, 200, 42, dcfg.type);
 
-        auto t1 = high_resolution_clock::now();
-        index.create(data);
-        auto t2 = high_resolution_clock::now();
-        auto build_time = duration_cast<microseconds>(t2 - t1).count() / 1e6;
+            auto t1 = high_resolution_clock::now();
+            index.create(data);
+            auto t2 = high_resolution_clock::now();
+            auto build_time =
+                duration_cast<microseconds>(t2 - t1).count() / 1e6;
 
-        size_t total_correct = 0;
-        auto t3 = high_resolution_clock::now();
-        size_t query_count = std::min(size_t(100), s.N);
-        for (size_t i = 0; i < query_count; ++i) {
-            auto result = index.search(data[i], s.K, 200);
-            for (size_t id : result)
-                if (id == i) {
-                    ++total_correct;
-                    break;
-                }
+            size_t total_correct = 0;
+            auto t3 = high_resolution_clock::now();
+            size_t query_count = std::min(size_t(100), s.N);
+            for (size_t i = 0; i < query_count; ++i) {
+                auto result = index.search(data[i], s.K, 200);
+                for (size_t id : result)
+                    if (id == i) {
+                        ++total_correct;
+                        break;
+                    }
+            }
+            auto t4 = high_resolution_clock::now();
+            auto query_time = duration_cast<microseconds>(t4 - t3).count()
+                              / double(query_count);
+
+            double recall = static_cast<double>(total_correct) / query_count;
+
+            cout << dcfg.label << " | " << s.N << " | " << s.DIM << " | "
+                 << s.K << " | " << build_time << " | " << query_time << " | "
+                 << recall << "\n";
+
+            csv << dcfg.label << "," << s.N << "," << s.DIM << "," << s.K
+                << "," << build_time << "," << query_time << "," << recall
+                << "\n";
         }
-        auto t4 = high_resolution_clock::now();
-        auto query_time =
-            duration_cast<microseconds>(t4 - t3).count() / double(query_count);
-
-        double recall = static_cast<double>(total_correct) / query_count;
-
-        cout << s.N << " | " << s.DIM << " | " << s.K << " | " << build_time
-             << " | " << query_time << " | " << recall << "\n";
-
-        csv << s.N << "," << s.DIM << "," << s.K << ","
-            << build_time << "," << query_time << "," << recall << "\n";
+        cout << "\n";
     }
-    cout << "\n";
 }
 

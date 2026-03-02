@@ -1,4 +1,5 @@
 #include "hnsw.h"
+
 #include <algorithm>
 #include <cmath>
 #include <queue>
@@ -6,29 +7,43 @@
 
 using std::vector, std::unordered_set, std::priority_queue, std::pair;
 
-Node::Node(size_t id, size_t level, const vector<float> &embedding)
-    : id(id), level(level), embedding(embedding) {
+Node::Node(size_t id, size_t level, const vector<float> &embedding) :
+    id(id),
+    level(level),
+    embedding(embedding) {
     neighbors.resize(level + 1);
 }
 
-HnswCPU::HnswCPU(size_t M_, size_t efConstruction_, uint32_t seed)
-    : M(M_), M0(2 * M_), efConstruction(efConstruction_),
-      levelMultiplier(1.0 / std::log(static_cast<double>(M_))), entryPoint(0),
-      maxLevel(0), currentId(0), gen(seed), uniform_dist(0.0f, 1.0f) {}
+HnswCPU::HnswCPU(
+    size_t M_,
+    size_t efConstruction_,
+    uint32_t seed,
+    DistanceType distType_
+) :
+    M(M_),
+    M0(2 * M_),
+    efConstruction(efConstruction_),
+    levelMultiplier(1.0 / std::log(static_cast<double>(M_))),
+    entryPoint(0),
+    maxLevel(0),
+    currentId(0),
+    gen(seed),
+    uniform_dist(0.0f, 1.0f),
+    distType(distType_),
+    distFunc(getDistanceFunction(distType_)) {}
 
 size_t HnswCPU::sampleLevel() {
     double u = 1.0 - static_cast<double>(uniform_dist(gen));
     return static_cast<size_t>(-std::log(u) * levelMultiplier);
 }
 
-double
-HnswCPU::l2Distance(const vector<float> &a, const vector<float> &b) const {
-    double dist = 0.0;
-    for (size_t i = 0; i < a.size(); ++i) {
-        double diff = static_cast<double>(a[i]) - static_cast<double>(b[i]);
-        dist += diff * diff;
+float HnswCPU::scoreForHeap(float raw) const {
+    if (distType == DistanceType::COSINE) {
+        // For cosine we maximize similarity, so use negative for min-heap logic.
+        return -raw;
     }
-    return dist;
+    // For true distances (L1/L2), smaller is better as-is.
+    return raw;
 }
 
 vector<size_t> HnswCPU::searchLayer(
@@ -37,35 +52,42 @@ vector<size_t> HnswCPU::searchLayer(
     size_t ef,
     size_t level
 ) {
-    using DistIdPair = std::pair<double, size_t>;
 
-    std::priority_queue<DistIdPair, vector<DistIdPair>, std::greater<>>
+    priority_queue<
+        pair<float, size_t>,
+        vector<pair<float, size_t> >,
+        std::greater<std::pair<float, size_t> > >
         candidates;
-    std::priority_queue<DistIdPair> topResults;
-    std::unordered_set<size_t> visited;
+    priority_queue<pair<float, size_t>> topResults;
+    unordered_set<size_t> vis;
 
-    double dist = l2Distance(query, nodes[entry].embedding);
-    candidates.push({dist, entry});
-    topResults.push({dist, entry});
-    visited.insert(entry);
+    float dist =
+        distFunc(query.data(), nodes[entry].embedding.data(), query.size());
+    float score = scoreForHeap(dist);
+    candidates.push({score, entry});
+    topResults.push({score, entry});
+    vis.insert(entry);
 
     while (!candidates.empty()) {
-        auto [currDist, currId] = candidates.top();
+        auto [currScore, currId] = candidates.top();
         candidates.pop();
 
-        double worstDist = topResults.top().first;
-        if (currDist > worstDist)
+        float worstScore = topResults.top().first;
+        if (currScore > worstScore)
             break;
 
         for (size_t nei : nodes[currId].neighbors[level]) {
-            if (visited.count(nei))
+            if (vis.count(nei))
                 continue;
-            visited.insert(nei);
+            vis.insert(nei);
 
-            double d = l2Distance(query, nodes[nei].embedding);
-            if (topResults.size() < ef || d < topResults.top().first) {
-                candidates.push({d, nei});
-                topResults.push({d, nei});
+            float d = distFunc(
+                query.data(), nodes[nei].embedding.data(), query.size()
+            );
+            float dScore = scoreForHeap(d);
+            if (topResults.size() < ef || dScore < topResults.top().first) {
+                candidates.push({dScore, nei});
+                topResults.push({dScore, nei});
                 if (topResults.size() > ef)
                     topResults.pop();
             }
@@ -85,15 +107,18 @@ vector<size_t> HnswCPU::selectNeighbors(
     const vector<size_t> &candidates,
     size_t M_
 ) {
-    vector<std::pair<double, size_t>> distList;
+    vector<std::pair<float, size_t>> distList;
     for (size_t id : candidates) {
-        distList.emplace_back(l2Distance(query, nodes[id].embedding), id);
+        float dist =
+            distFunc(query.data(), nodes[id].embedding.data(), query.size());
+        float score = scoreForHeap(dist);
+        distList.emplace_back(score, id);
     }
 
     std::sort(
-        distList.begin(), distList.end(), [](const auto &a, const auto &b) {
-            return a.first < b.first;
-        }
+        distList.begin(),
+        distList.end(),
+        [](const auto &a, const auto &b) { return a.first < b.first; }
     );
 
     vector<size_t> result;
@@ -115,32 +140,38 @@ vector<size_t> HnswCPU::selectNeighborsWithHeuristic(
 
     // (dist, ind)
     priority_queue<
-        pair<double, size_t>,
-        vector<pair<double, size_t>>,
-        std::greater<>>
+        pair<float, size_t>,
+        vector<pair<float, size_t> >,
+        std::greater<std::pair<float, size_t> > >
         pq;
 
     // (dist, ind)
     priority_queue<
-        pair<double, size_t>,
-        vector<pair<double, size_t>>,
-        std::greater<>>
+        pair<float, size_t>,
+        vector<pair<float, size_t> >,
+        std::greater<std::pair<float, size_t> > >
         discarded;
 
     unordered_set<size_t> vis;
 
     for (size_t cand : candidates) {
         if (vis.count(cand) == 0) {
-            double dist = l2Distance(query, nodes[cand].embedding);
-            pq.push({dist, cand});
+            float dist = distFunc(
+                query.data(), nodes[cand].embedding.data(), query.size()
+            );
+            float score = scoreForHeap(dist);
+            pq.push({score, cand});
             vis.insert(cand);
         }
 
         if (extendCandidates) {
             for (size_t nei : nodes[cand].neighbors[layer]) {
                 if (vis.count(nei) == 0) {
-                    double dist = l2Distance(query, nodes[nei].embedding);
-                    pq.push({dist, nei});
+                    float dist = distFunc(
+                        query.data(), nodes[nei].embedding.data(), query.size()
+                    );
+                    float score = scoreForHeap(dist);
+                    pq.push({score, nei});
                     vis.insert(nei);
                 }
             }
@@ -148,14 +179,17 @@ vector<size_t> HnswCPU::selectNeighborsWithHeuristic(
     }
 
     while (!pq.empty() && ans.size() < max_neighbours) {
-        auto [dist, ind] = pq.top();
+        auto [score, ind] = pq.top();
         pq.pop();
 
         bool good = true;
 
         for (size_t i : ans) {
-            double d = l2Distance(query, nodes[i].embedding);
-            if (d < dist) {
+            float d = distFunc(
+                query.data(), nodes[i].embedding.data(), query.size()
+            );
+            float dScore = scoreForHeap(d);
+            if (dScore < score) {
                 // Existing element in ans is closer so reject ind
                 good = false;
                 break;
@@ -165,13 +199,13 @@ vector<size_t> HnswCPU::selectNeighborsWithHeuristic(
         if (good) {
             ans.push_back(ind);
         } else {
-            discarded.push({dist, ind});
+            discarded.push({score, ind});
         }
     }
 
     if (keepPrunedConnections) {
         while (!discarded.empty() && ans.size() < max_neighbours) {
-            auto [dist, ind] = discarded.top();
+            auto [score, ind] = discarded.top();
             discarded.pop();
             ans.push_back(ind);
         }

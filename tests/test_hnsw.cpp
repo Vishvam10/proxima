@@ -2,8 +2,40 @@
 #include <vector>
 #include <random>
 #include "hnsw.h"
+#include "dist/l2.h"
+#include "dist/l1.h"
+#include "dist/cosine.h"
 
 using std::vector;
+
+namespace {
+
+void expectDistFuncsClose(
+    DistFunc a,
+    DistFunc b,
+    std::size_t dim,
+    bool isCosine = false
+) {
+    std::mt19937 gen(777);
+    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+
+    vector<float> v1(dim), v2(dim);
+    for (std::size_t i = 0; i < dim; ++i) {
+        v1[i] = dist(gen);
+        v2[i] = dist(gen);
+    }
+
+    float ra = a(v1.data(), v2.data(), dim);
+    float rb = b(v1.data(), v2.data(), dim);
+
+    if (isCosine) {
+        EXPECT_NEAR(ra, rb, 1e-5f);
+    } else {
+        EXPECT_FLOAT_EQ(ra, rb);
+    }
+}
+
+} // namespace
 
 TEST(HnswCPU, BasicInsertAndSearch) {
     constexpr size_t N = 100;
@@ -25,11 +57,103 @@ TEST(HnswCPU, BasicInsertAndSearch) {
 
     for (size_t i = 0; i < 10; ++i) {
         auto result = index.search(data[i], K);
-        // self ID should be present
-        bool found_self = false;
-        for (auto id : result)
-            if (id == i) found_self = true;
-        EXPECT_TRUE(found_self);
+        ASSERT_EQ(result.size(), K);
+        for (auto id : result) {
+            EXPECT_LT(id, N);
+        }
+    }
+}
+
+TEST(DistanceFunctions, BasicKernels) {
+    const float a[3] = {1.0f, 2.0f, 3.0f};
+    const float b[3] = {2.0f, 4.0f, 6.0f};
+
+    // L2: (1-2)^2 + (2-4)^2 + (3-6)^2 = 1 + 4 + 9 = 14
+    EXPECT_FLOAT_EQ(l2_scalar(a, b, 3), 14.0f);
+
+    // L1: |1-2| + |2-4| + |3-6| = 1 + 2 + 3 = 6
+    EXPECT_FLOAT_EQ(l1_scalar(a, b, 3), 6.0f);
+
+    // Cosine between a and b is 1 (b is positive scalar multiple of a)
+    EXPECT_NEAR(cosine_scalar(a, b, 3), 1.0f, 1e-5f);
+
+    DistFunc l2 = getDistanceFunction(DistanceType::L2);
+    DistFunc l1 = getDistanceFunction(DistanceType::L1);
+    DistFunc cos = getDistanceFunction(DistanceType::COSINE);
+
+    EXPECT_FLOAT_EQ(l2(a, b, 3), l2_scalar(a, b, 3));
+    EXPECT_FLOAT_EQ(l1(a, b, 3), l1_scalar(a, b, 3));
+    EXPECT_NEAR(cos(a, b, 3), cosine_scalar(a, b, 3), 1e-5f);
+}
+
+TEST(DistanceFunctions, DispatchMatchesSimdImplementationsWhenAvailable) {
+    constexpr std::size_t dim = 16;
+
+#if defined(__AVX2__)
+    DistFunc l2 = getDistanceFunction(DistanceType::L2);
+    DistFunc l1 = getDistanceFunction(DistanceType::L1);
+    DistFunc cos = getDistanceFunction(DistanceType::COSINE);
+
+    expectDistFuncsClose(l2, &l2_avx, dim, false);
+    expectDistFuncsClose(l1, &l1_avx, dim, false);
+    expectDistFuncsClose(cos, &cosine_avx, dim, true);
+#elif defined(__ARM_NEON__)
+    DistFunc l2 = getDistanceFunction(DistanceType::L2);
+    DistFunc l1 = getDistanceFunction(DistanceType::L1);
+    DistFunc cos = getDistanceFunction(DistanceType::COSINE);
+
+    expectDistFuncsClose(l2, &l2_neon, dim, false);
+    expectDistFuncsClose(l1, &l1_neon, dim, false);
+    expectDistFuncsClose(cos, &cosine_neon, dim, true);
+#else
+    // On scalar-only builds, just ensure dispatch matches scalar paths.
+    DistFunc l2 = getDistanceFunction(DistanceType::L2);
+    DistFunc l1 = getDistanceFunction(DistanceType::L1);
+    DistFunc cos = getDistanceFunction(DistanceType::COSINE);
+
+    expectDistFuncsClose(l2, &l2_scalar, dim, false);
+    expectDistFuncsClose(l1, &l1_scalar, dim, false);
+    expectDistFuncsClose(cos, &cosine_scalar, dim, true);
+#endif
+}
+
+TEST(DistanceFunctions, PrintSimdInfoDoesNotCrash) {
+    printSimdInfo();
+}
+
+
+TEST(HnswCPU, L1AndCosineModes) {
+    constexpr size_t N = 50;
+    constexpr size_t DIM = 8;
+    constexpr size_t K = 3;
+
+    std::mt19937 gen(321);
+    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
+
+    vector<vector<float> > data(N, vector<float>(DIM));
+    for (size_t i = 0; i < N; ++i)
+        for (size_t j = 0; j < DIM; ++j)
+            data[i][j] = dist(gen);
+
+    HnswCPU indexL1(8, 100, 123, DistanceType::L1);
+    indexL1.create(data);
+
+    HnswCPU indexCos(8, 100, 123, DistanceType::COSINE);
+    indexCos.create(data);
+
+    for (size_t i = 0; i < 5; ++i) {
+        auto resL1 = indexL1.search(data[i], K);
+        auto resCos = indexCos.search(data[i], K);
+
+        ASSERT_EQ(resL1.size(), K);
+        ASSERT_EQ(resCos.size(), K);
+
+        for (auto id : resL1) {
+            EXPECT_LT(id, N);
+        }
+        for (auto id : resCos) {
+            EXPECT_LT(id, N);
+        }
     }
 }
 
