@@ -31,6 +31,8 @@ int main() {
         {100000, 32, 10}
     };
 
+    cout << "\nC++ Benchmarks\n\n";
+
     // Human-readable table
     cout << std::fixed << std::setprecision(4);
     cout << "Dataset | Dim | K | Build (s) | Query (us) | Recall\n";
@@ -61,7 +63,7 @@ int main() {
         auto t3 = high_resolution_clock::now();
         size_t query_count = std::min(size_t(100), s.N);
         for (size_t i = 0; i < query_count; ++i) {
-            auto result = index.search(data[i], s.K);
+            auto result = index.search(data[i], s.K, 200);
             for (size_t id : result)
                 if (id == i) {
                     ++total_correct;

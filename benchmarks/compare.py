@@ -1,8 +1,6 @@
 import csv
-from collections import defaultdict
 from pathlib import Path
 from typing import Dict, Tuple
-
 
 Key = Tuple[int, int, int]
 
@@ -25,10 +23,19 @@ def load_results(path: Path) -> Dict[Key, Dict[str, float]]:
     return results
 
 
+def percentage_str(cpp_val: float, py_val: float) -> str:
+    if py_val == 0:
+        return "inf"
+    diff = (cpp_val / py_val - 1.0) * 100
+    sign = "-" if diff >= 0 else "+"
+    return f"{sign}{abs(diff):.1f}%"
+
+
 def main() -> None:
     base_dir = Path(__file__).resolve().parent
     cpp_path = base_dir / "cpp_results.csv"
     py_path = base_dir / "python_results.csv"
+    output_csv = base_dir / "comparison.csv"
 
     if not cpp_path.exists():
         raise SystemExit(f"Missing C++ results file: {cpp_path}")
@@ -45,6 +52,7 @@ def main() -> None:
     if not common:
         raise SystemExit("No common benchmark scenarios between C++ and Python results.")
 
+    # Warn about missing scenarios
     missing_cpp = py_keys - cpp_keys
     missing_py = cpp_keys - py_keys
 
@@ -60,33 +68,61 @@ def main() -> None:
             print(f"  dataset={n}, dim={d}, k={k}")
         print()
 
+    # Header for console
     header = (
         f"{'Dataset':>7} | {'Dim':>4} | {'K':>3} | "
-        f"{'Build C++ (s)':>13} | {'Build Py (s)':>12} | {'C++/Py':>7} | "
-        f"{'Query C++ (us)':>14} | {'Query Py (us)':>13} | {'C++/Py':>7} | "
+        f"{'Build C++ (s)':>13} | {'Build Py (s)':>12} | {'ΔBuild':>7} | "
+        f"{'Query C++ (us)':>14} | {'Query Py (us)':>13} | {'ΔQuery':>7} | "
         f"{'Recall C++':>10} | {'Recall Py':>9}"
     )
     print()
     print(header)
     print("-" * len(header))
 
+    # Prepare rows for CSV export
+    csv_rows = []
     for n, d, k in common:
         c = cpp[(n, d, k)]
         p = py[(n, d, k)]
 
-        build_ratio = c["build_s"] / p["build_s"] if p["build_s"] > 0 else float("inf")
-        query_ratio = c["query_us"] / p["query_us"] if p["query_us"] > 0 else float("inf")
+        build_pct = percentage_str(c["build_s"], p["build_s"])
+        query_pct = percentage_str(c["query_us"], p["query_us"])
 
         print(
             f"{n:7d} | {d:4d} | {k:3d} | "
-            f"{c['build_s']:13.4f} | {p['build_s']:12.4f} | {build_ratio:7.3f} | "
-            f"{c['query_us']:14.3f} | {p['query_us']:13.3f} | {query_ratio:7.3f} | "
+            f"{c['build_s']:13.4f} | {p['build_s']:12.4f} | {build_pct:>7} | "
+            f"{c['query_us']:14.3f} | {p['query_us']:13.3f} | {query_pct:>7} | "
             f"{c['recall']:10.4f} | {p['recall']:9.4f}"
         )
 
-    print()
+        csv_rows.append({
+            "dataset": n,
+            "dim": d,
+            "k": k,
+            "build_cpp_s": c["build_s"],
+            "build_py_s": p["build_s"],
+            "build_pct": build_pct,
+            "query_cpp_us": c["query_us"],
+            "query_py_us": p["query_us"],
+            "query_pct": query_pct,
+            "recall_cpp": c["recall"],
+            "recall_py": p["recall"]
+        })
+
+    # Export to CSV
+    with output_csv.open("w", newline="") as f:
+        fieldnames = [
+            "dataset", "dim", "k",
+            "build_cpp_s", "build_py_s", "build_pct",
+            "query_cpp_us", "query_py_us", "query_pct",
+            "recall_cpp", "recall_py"
+        ]
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(csv_rows)
+
+    print(f"\nComparison exported to {output_csv}")
 
 
 if __name__ == "__main__":
     main()
-

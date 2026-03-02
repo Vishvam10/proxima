@@ -20,6 +20,7 @@ def main() -> None:
     csv_path = base_dir / "python_results.csv"
 
     print()
+    print("Python Benchmarks")
     print(
         f"{'Dataset':>6} | {'Dim':>3} | {'K':>2} | "
         f"{'Build (s)':>9} | {'Query (us)':>10} | {'Recall':>6}"

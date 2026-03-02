@@ -22,7 +22,7 @@ class HnswIndex {
     virtual void create(const vector<vector<float>> &data) = 0;
     virtual void add(const vector<float> &embedding) = 0;
     virtual vector<size_t>
-    search(const vector<float> &query, size_t k, int efSearch = 50) = 0;
+    search(const vector<float> &query, size_t k, size_t efSearch = 50) = 0;
     virtual size_t size() const = 0;
 };
 
@@ -33,7 +33,7 @@ class HnswCPU : public HnswIndex {
     void create(const vector<vector<float>> &data) override;
     void add(const vector<float> &embedding) override;
     vector<size_t>
-    search(const vector<float> &query, size_t k, int efSearch = 50) override;
+    search(const vector<float> &query, size_t k, size_t efSearch = 50) override;
     size_t size() const override;
 
   private:

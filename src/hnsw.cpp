@@ -234,7 +234,7 @@ void HnswCPU::add(const vector<float> &embedding) {
 }
 
 vector<size_t>
-HnswCPU::search(const vector<float> &query, size_t k, int efSearch) {
+HnswCPU::search(const vector<float> &query, size_t k, size_t efSearch) {
     if (nodes.empty())
         return {};
 
