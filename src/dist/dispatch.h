@@ -10,6 +10,6 @@ enum class DistanceType {
 
 using DistFunc = double (*)(const float*, const float*, std::size_t);
 
-DistFunc getDistanceFunction(DistanceType type);
+DistFunc getDistanceFunction(DistanceType type, bool forceScalar = false);
 const char* getSimdLabel();
 void printSimdInfo();

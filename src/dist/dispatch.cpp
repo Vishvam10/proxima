@@ -5,8 +5,9 @@
 
 #include <iostream>
 
-DistFunc getDistanceFunction(DistanceType type) {
+DistFunc getDistanceFunction(DistanceType type, bool forceScalar) {
     if (type == DistanceType::L2) {
+        if (forceScalar) return &l2_scalar;
 #if defined(__AVX2__)
         return &l2_avx;
 #elif defined(__ARM_NEON__)
@@ -17,8 +18,9 @@ DistFunc getDistanceFunction(DistanceType type) {
     }
 
     if (type == DistanceType::INNER_PRODUCT) {
+        if (forceScalar) return &ip_scalar;
 #if defined(__AVX2__)
-        return &ip_avs;
+        return &ip_avx;
 #elif defined(__ARM_NEON__)
         return &ip_neon;
 #else
@@ -27,6 +29,7 @@ DistFunc getDistanceFunction(DistanceType type) {
     }
 
     if (type == DistanceType::COSINE) {
+        if (forceScalar) return &cosine_scalar;
 #if defined(__AVX2__)
         return &cosine_avx;
 #elif defined(__ARM_NEON__)

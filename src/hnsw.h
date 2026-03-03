@@ -72,7 +72,8 @@ class HnswCPU : public HnswIndex {
         int M = 16,
         int efConstruction = 200,
         uint32_t seed = 42,
-        DistanceType distType = DistanceType::L2
+        DistanceType distType = DistanceType::L2,
+        bool forceScalar = false
     );
 
     void create(const vector<vector<float>> &data) override;

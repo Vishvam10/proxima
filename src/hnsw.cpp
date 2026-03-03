@@ -19,7 +19,8 @@ HnswCPU::HnswCPU(
     int M_,
     int efConstruction_,
     uint32_t seed,
-    DistanceType distType
+    DistanceType distType,
+    bool forceScalar
 ) :
     M(M_),
     M0(2 * M_),
@@ -31,7 +32,7 @@ HnswCPU::HnswCPU(
     gen(seed),
     uniform_dist(0.0f, 1.0f),
     distType(distType) {
-    distFunc = getDistanceFunction(distType);
+    distFunc = getDistanceFunction(distType, forceScalar);
 }
 
 int HnswCPU::sampleLevel() {
