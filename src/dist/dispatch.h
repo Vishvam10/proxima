@@ -4,11 +4,12 @@
 
 enum class DistanceType {
     L2,
-    L1,
+    INNER_PRODUCT,
     COSINE
 };
 
 using DistFunc = float (*)(const float*, const float*, std::size_t);
 
 DistFunc getDistanceFunction(DistanceType type);
+const char* getSimdLabel();
 void printSimdInfo();

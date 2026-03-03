@@ -1,6 +1,6 @@
 #include "dispatch.h"
 #include "l2.h"
-#include "l1.h"
+#include "inner_product.h"
 #include "cosine.h"
 
 #include <iostream>
@@ -16,13 +16,13 @@ DistFunc getDistanceFunction(DistanceType type) {
 #endif
     }
 
-    if (type == DistanceType::L1) {
+    if (type == DistanceType::INNER_PRODUCT) {
 #if defined(__AVX2__)
-        return &l1_avx;
+        return &ip_avs;
 #elif defined(__ARM_NEON__)
-        return &l1_neon;
+        return &ip_neon;
 #else
-        return &l1_scalar;
+        return &ip_scalar;
 #endif
     }
 
