@@ -4,18 +4,18 @@
 
 // Inner product distance: 1.0f - dot(a, b)
 // Lower value = more similar (matches hnswlib "ip" space convention).
-inline float ip_scalar(const float* a, const float* b, std::size_t dim) {
-    float dot = 0.0f;
+inline double ip_scalar(const float* a, const float* b, std::size_t dim) {
+    double dot = 0.0;
     for (std::size_t i = 0; i < dim; ++i) {
         dot += a[i] * b[i];
     }
-    return 1.0f - dot;
+    return 1.0 - dot;
 }
 
 #if defined(__AVX2__)
 #include <immintrin.h>
 
-inline float ip_avx(const float* a, const float* b, std::size_t dim) {
+inline double ip_avx(const float* a, const float* b, std::size_t dim) {
     __m256 sum = _mm256_setzero_ps();
     std::size_t i = 0;
 
@@ -28,21 +28,21 @@ inline float ip_avx(const float* a, const float* b, std::size_t dim) {
     float tmp[8];
     _mm256_storeu_ps(tmp, sum);
 
-    float dot = tmp[0] + tmp[1] + tmp[2] + tmp[3]
-              + tmp[4] + tmp[5] + tmp[6] + tmp[7];
+    double dot = tmp[0] + tmp[1] + tmp[2] + tmp[3]
+               + tmp[4] + tmp[5] + tmp[6] + tmp[7];
 
     for (; i < dim; ++i) {
         dot += a[i] * b[i];
     }
 
-    return 1.0f - dot;
+    return 1.0 - dot;
 }
 #endif
 
 #if defined(__ARM_NEON__)
 #include <arm_neon.h>
 
-inline float ip_neon(const float* a, const float* b, std::size_t dim) {
+inline double ip_neon(const float* a, const float* b, std::size_t dim) {
     float32x4_t sum = vdupq_n_f32(0.0f);
     std::size_t i = 0;
 
@@ -54,12 +54,12 @@ inline float ip_neon(const float* a, const float* b, std::size_t dim) {
 
     float tmp[4];
     vst1q_f32(tmp, sum);
-    float dot = tmp[0] + tmp[1] + tmp[2] + tmp[3];
+    double dot = tmp[0] + tmp[1] + tmp[2] + tmp[3];
 
     for (; i < dim; ++i) {
         dot += a[i] * b[i];
     }
 
-    return 1.0f - dot;
+    return 1.0 - dot;
 }
 #endif

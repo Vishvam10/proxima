@@ -8,7 +8,7 @@ enum class DistanceType {
     COSINE
 };
 
-using DistFunc = float (*)(const float*, const float*, std::size_t);
+using DistFunc = double (*)(const float*, const float*, std::size_t);
 
 DistFunc getDistanceFunction(DistanceType type);
 const char* getSimdLabel();

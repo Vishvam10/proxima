@@ -20,6 +20,7 @@ int main() {
             data[i][j] = dist(gen);
 
     HnswCPU index(16, 200);
+    index.printInfo();
     index.create(data);
 
     vector<float> query = data[123];
