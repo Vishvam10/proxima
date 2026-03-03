@@ -3,10 +3,10 @@
 #include <cstddef>
 
 // L2 (squared Euclidean) distance variants.
-inline float l2_scalar(const float* a, const float* b, std::size_t dim) {
-    float sum = 0.0f;
+inline double l2_scalar(const float* a, const float* b, std::size_t dim) {
+    double sum = 0.0;
     for (std::size_t i = 0; i < dim; ++i) {
-        float d = a[i] - b[i];
+        double d = a[i] - b[i];
         sum += d * d;
     }
     return sum;
@@ -15,7 +15,7 @@ inline float l2_scalar(const float* a, const float* b, std::size_t dim) {
 #if defined(__AVX2__)
 #include <immintrin.h>
 
-inline float l2_avx(const float* a, const float* b, std::size_t dim) {
+inline double l2_avx(const float* a, const float* b, std::size_t dim) {
     __m256 sum = _mm256_setzero_ps();
     std::size_t i = 0;
 
@@ -30,11 +30,11 @@ inline float l2_avx(const float* a, const float* b, std::size_t dim) {
     float tmp[8];
     _mm256_storeu_ps(tmp, sum);
 
-    float total = tmp[0] + tmp[1] + tmp[2] + tmp[3]
-                + tmp[4] + tmp[5] + tmp[6] + tmp[7];
+    double total = tmp[0] + tmp[1] + tmp[2] + tmp[3]
+                 + tmp[4] + tmp[5] + tmp[6] + tmp[7];
 
     for (; i < dim; ++i) {
-        float d = a[i] - b[i];
+        double d = a[i] - b[i];
         total += d * d;
     }
 
@@ -45,7 +45,7 @@ inline float l2_avx(const float* a, const float* b, std::size_t dim) {
 #if defined(__ARM_NEON__)
 #include <arm_neon.h>
 
-inline float l2_neon(const float* a, const float* b, std::size_t dim) {
+inline double l2_neon(const float* a, const float* b, std::size_t dim) {
     float32x4_t sum = vdupq_n_f32(0.0f);
     std::size_t i = 0;
 
@@ -58,10 +58,10 @@ inline float l2_neon(const float* a, const float* b, std::size_t dim) {
 
     float tmp[4];
     vst1q_f32(tmp, sum);
-    float total = tmp[0] + tmp[1] + tmp[2] + tmp[3];
+    double total = tmp[0] + tmp[1] + tmp[2] + tmp[3];
 
     for (; i < dim; ++i) {
-        float d = a[i] - b[i];
+        double d = a[i] - b[i];
         total += d * d;
     }
 
