@@ -3,7 +3,7 @@
 #include <random>
 #include "hnsw.h"
 #include "dist/l2.h"
-#include "dist/l1.h"
+#include "dist/inner_product.h"
 #include "dist/cosine.h"
 
 using std::vector;
@@ -68,21 +68,16 @@ TEST(DistanceFunctions, BasicKernels) {
     const float a[3] = {1.0f, 2.0f, 3.0f};
     const float b[3] = {2.0f, 4.0f, 6.0f};
 
-    // L2: (1-2)^2 + (2-4)^2 + (3-6)^2 = 1 + 4 + 9 = 14
     EXPECT_FLOAT_EQ(l2_scalar(a, b, 3), 14.0f);
-
-    // L1: |1-2| + |2-4| + |3-6| = 1 + 2 + 3 = 6
-    EXPECT_FLOAT_EQ(l1_scalar(a, b, 3), 6.0f);
-
-    // Cosine between a and b is 1 (b is positive scalar multiple of a)
+    EXPECT_FLOAT_EQ(ip_scalar(a, b, 3), 24.0f);
     EXPECT_NEAR(cosine_scalar(a, b, 3), 1.0f, 1e-5f);
 
     DistFunc l2 = getDistanceFunction(DistanceType::L2);
-    DistFunc l1 = getDistanceFunction(DistanceType::L1);
+    DistFunc ip = getDistanceFunction(DistanceType::INNER_PRODUCT);
     DistFunc cos = getDistanceFunction(DistanceType::COSINE);
 
     EXPECT_FLOAT_EQ(l2(a, b, 3), l2_scalar(a, b, 3));
-    EXPECT_FLOAT_EQ(l1(a, b, 3), l1_scalar(a, b, 3));
+    EXPECT_FLOAT_EQ(ip(a, b, 3), ip_scalar(a, b, 3));
     EXPECT_NEAR(cos(a, b, 3), cosine_scalar(a, b, 3), 1e-5f);
 }
 
@@ -99,11 +94,11 @@ TEST(DistanceFunctions, DispatchMatchesSimdImplementationsWhenAvailable) {
     expectDistFuncsClose(cos, &cosine_avx, dim, true);
 #elif defined(__ARM_NEON__)
     DistFunc l2 = getDistanceFunction(DistanceType::L2);
-    DistFunc l1 = getDistanceFunction(DistanceType::L1);
+    DistFunc l1 = getDistanceFunction(DistanceType::INNER_PRODUCT);
     DistFunc cos = getDistanceFunction(DistanceType::COSINE);
 
     expectDistFuncsClose(l2, &l2_neon, dim, false);
-    expectDistFuncsClose(l1, &l1_neon, dim, false);
+    expectDistFuncsClose(l1, &ip_neon, dim, false);
     expectDistFuncsClose(cos, &cosine_neon, dim, true);
 #else
     // On scalar-only builds, just ensure dispatch matches scalar paths.
@@ -135,7 +130,7 @@ TEST(HnswCPU, L1AndCosineModes) {
         for (size_t j = 0; j < DIM; ++j)
             data[i][j] = dist(gen);
 
-    HnswCPU indexL1(8, 100, 123, DistanceType::L1);
+    HnswCPU indexL1(8, 100, 123, DistanceType::INNER_PRODUCT);
     indexL1.create(data);
 
     HnswCPU indexCos(8, 100, 123, DistanceType::COSINE);
