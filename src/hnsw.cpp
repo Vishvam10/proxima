@@ -72,7 +72,7 @@ HnswCPU::searchLayer(const vector<float> &query, int entry, int ef, int level) {
             visited[nei] = 1;
 
             double d =
-                distFunc(query.data(), nodes[entry].embedding.data(), queryLen);
+                distFunc(query.data(), nodes[nei].embedding.data(), queryLen);
 
             if (static_cast<int>(topResults.size()) < ef ||
                 d < topResults.top().first) {
