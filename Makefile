@@ -11,7 +11,7 @@ VENV_PYTHON := $(VENV_DIR)/bin/python
 # Automatically find all .cpp files inside src
 SRC := $(shell find src -name "*.cpp")
 
-.PHONY: all build test bench cppbench pybench clean rebuild help scratchpad
+.PHONY: all build test bench cppbench pybench plot clean rebuild help scratchpad
 
 all: build
 
@@ -62,10 +62,20 @@ pybench: $(VENV_PYTHON)
 	@$(VENV_PYTHON) $(BENCH_DIR)/bench.py
 
 # --------------------------------
-# Run both benchmarks and compare
+# Run both benchmarks, compare, and plot
 # --------------------------------
 bench: cppbench pybench
-	@$(VENV_PYTHON) $(BENCH_DIR)/compare.py
+	@RESULTS_DIR=$$(date +"%d-%m-%Y-%H-%M-%S") && \
+	$(VENV_PYTHON) $(BENCH_DIR)/compare.py $$RESULTS_DIR && \
+	$(VENV_PYTHON) $(BENCH_DIR)/plot.py $$RESULTS_DIR
+
+# --------------------------------
+# Plot from latest results (standalone)
+# --------------------------------
+plot: $(VENV_PYTHON)
+	@LATEST=$$(ls -t $(BENCH_DIR)/results/ | head -1) && \
+	if [ -z "$$LATEST" ]; then echo "No results found. Run 'make bench' first."; exit 1; fi && \
+	$(VENV_PYTHON) $(BENCH_DIR)/plot.py $$LATEST
 
 # --------------------------------
 # Clean
@@ -83,6 +93,7 @@ help:
 	@echo "make test       - Run tests"
 	@echo "make cppbench   - Run C++ benchmark"
 	@echo "make pybench    - Run Python benchmark (in venv)"
-	@echo "make bench      - Run both benchmarks and compare"
+	@echo "make bench      - Run both benchmarks, compare, and plot"
+	@echo "make plot       - Re-plot from latest results"
 	@echo "make scratchpad - Compile and run scratchpad directly"
 	@echo "make clean      - Clean build"
