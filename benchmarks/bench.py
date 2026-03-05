@@ -23,13 +23,17 @@ def main() -> None:
     print("Python Benchmarks")
     print(
         f"{'Dataset':>6} | {'Dim':>3} | {'K':>2} | "
-        f"{'Build (s)':>9} | {'Query (us)':>10} | {'Recall':>6}"
+        f"{'Build (s)':>9} | {'Query (us)':>10} | "
+        f"{'Brute (us)':>10} | {'Speedup':>7} | {'Recall':>6}"
     )
-    print("-" * 60)
+    print("-" * 82)
 
     with csv_path.open("w", newline="") as f:
         writer = csv.writer(f)
-        writer.writerow(["dataset", "dim", "k", "build_s", "query_us", "recall"])
+        writer.writerow(
+            ["dataset", "dim", "k", "build_s", "query_us",
+             "brute_query_us", "speedup", "recall"]
+        )
 
         for N, DIM, K in SCENARIOS:
             data = np.random.rand(N, DIM).astype(np.float32)
@@ -48,16 +52,29 @@ def main() -> None:
             t3 = time.time()
             labels, _ = index.knn_query(q, k=K)
             t4 = time.time()
-            query_time = (t4 - t3) / len(q) * 1e6  # microseconds per query
+            query_time = (t4 - t3) / len(q) * 1e6
 
             recall = float(np.mean([i in labels[i] for i in range(len(q))]))
 
+            t5 = time.time()
+            for i in range(len(q)):
+                dists = np.sum((data - q[i]) ** 2, axis=1)
+                np.argpartition(dists, K)[:K]
+            t6 = time.time()
+            brute_query_time = (t6 - t5) / len(q) * 1e6
+
+            speedup = brute_query_time / query_time
+
             print(
                 f"{N:6} | {DIM:3} | {K:2} | "
-                f"{build_time:9.4f} | {query_time:10.3f} | {recall:6.4f}"
+                f"{build_time:9.4f} | {query_time:10.3f} | "
+                f"{brute_query_time:10.3f} | {speedup:6.2f}x | {recall:6.4f}"
             )
 
-            writer.writerow([N, DIM, K, build_time, query_time, recall])
+            writer.writerow(
+                [N, DIM, K, build_time, query_time,
+                 brute_query_time, speedup, recall]
+            )
 
     print()
 

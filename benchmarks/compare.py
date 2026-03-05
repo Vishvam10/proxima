@@ -18,6 +18,8 @@ def load_results(path: Path) -> Dict[Key, Dict[str, float]]:
             results[key] = {
                 "build_s": float(row["build_s"]),
                 "query_us": float(row["query_us"]),
+                "brute_query_us": float(row["brute_query_us"]),
+                "speedup": float(row["speedup"]),
                 "recall": float(row["recall"]),
             }
     return results
@@ -68,18 +70,18 @@ def main() -> None:
             print(f"  dataset={n}, dim={d}, k={k}")
         print()
 
-    # Header for console
     header = (
         f"{'Dataset':>7} | {'Dim':>4} | {'K':>3} | "
         f"{'Build C++ (s)':>13} | {'Build Py (s)':>12} | {'ΔBuild':>7} | "
         f"{'Query C++ (us)':>14} | {'Query Py (us)':>13} | {'ΔQuery':>7} | "
+        f"{'Brute C++ (us)':>14} | {'Brute Py (us)':>13} | "
+        f"{'Speedup C++':>11} | {'Speedup Py':>10} | "
         f"{'Recall C++':>10} | {'Recall Py':>9}"
     )
     print()
     print(header)
     print("-" * len(header))
 
-    # Prepare rows for CSV export
     csv_rows = []
     for n, d, k in common:
         c = cpp[(n, d, k)]
@@ -92,6 +94,8 @@ def main() -> None:
             f"{n:7d} | {d:4d} | {k:3d} | "
             f"{c['build_s']:13.4f} | {p['build_s']:12.4f} | {build_pct:>7} | "
             f"{c['query_us']:14.3f} | {p['query_us']:13.3f} | {query_pct:>7} | "
+            f"{c['brute_query_us']:14.3f} | {p['brute_query_us']:13.3f} | "
+            f"{c['speedup']:10.2f}x | {p['speedup']:9.2f}x | "
             f"{c['recall']:10.4f} | {p['recall']:9.4f}"
         )
 
@@ -105,17 +109,22 @@ def main() -> None:
             "query_cpp_us": c["query_us"],
             "query_py_us": p["query_us"],
             "query_pct": query_pct,
+            "brute_cpp_us": c["brute_query_us"],
+            "brute_py_us": p["brute_query_us"],
+            "speedup_cpp": c["speedup"],
+            "speedup_py": p["speedup"],
             "recall_cpp": c["recall"],
-            "recall_py": p["recall"]
+            "recall_py": p["recall"],
         })
 
-    # Export to CSV
     with output_csv.open("w", newline="") as f:
         fieldnames = [
             "dataset", "dim", "k",
             "build_cpp_s", "build_py_s", "build_pct",
             "query_cpp_us", "query_py_us", "query_pct",
-            "recall_cpp", "recall_py"
+            "brute_cpp_us", "brute_py_us",
+            "speedup_cpp", "speedup_py",
+            "recall_cpp", "recall_py",
         ]
         writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()

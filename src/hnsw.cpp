@@ -7,6 +7,8 @@ using std::pair;
 using std::priority_queue;
 using std::vector;
 
+using DistanceIndexPair = pair<double, int>;
+
 Node::Node(int id_, int level_, const vector<float> &emb)
     : id(id_), level(level_), embedding(emb) {
     neighbors.resize(level + 1);
@@ -35,10 +37,9 @@ HnswCPU::l2Distance(const vector<float> &a, const vector<float> &b) const {
 vector<int>
 HnswCPU::searchLayer(const vector<float> &query, int entry, int ef, int level) {
 
-    using DistId = pair<double, int>;
-
-    priority_queue<DistId, vector<DistId>, std::greater<>> candidates;
-    priority_queue<DistId> topResults;
+    priority_queue<DistanceIndexPair, vector<DistanceIndexPair>, std::greater<>>
+        candidates;
+    priority_queue<DistanceIndexPair> topResults;
 
     vector<uint8_t> visited(nodes.size(), 0);
 
@@ -121,9 +122,10 @@ vector<int> HnswCPU::selectNeighborsWithHeuristic(
 
     vector<int> result;
 
-    using DistId = pair<double, int>;
-    priority_queue<DistId, vector<DistId>, std::greater<>> pq;
-    priority_queue<DistId, vector<DistId>, std::greater<>> discarded;
+    priority_queue<DistanceIndexPair, vector<DistanceIndexPair>, std::greater<>>
+        pq;
+    priority_queue<DistanceIndexPair, vector<DistanceIndexPair>, std::greater<>>
+        discarded;
 
     vector<uint8_t> visited(nodes.size(), 0);
 
