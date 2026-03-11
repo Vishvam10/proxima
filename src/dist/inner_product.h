@@ -7,7 +7,7 @@
 inline double ip_scalar(const float* a, const float* b, std::size_t dim) {
     double dot = 0.0;
     for (std::size_t i = 0; i < dim; ++i) {
-        dot += a[i] * b[i];
+        dot += static_cast<double>(a[i]) * static_cast<double>(b[i]);
     }
     return 1.0 - dot;
 }
@@ -28,11 +28,13 @@ inline double ip_avx(const float* a, const float* b, std::size_t dim) {
     float tmp[8];
     _mm256_storeu_ps(tmp, sum);
 
-    double dot = tmp[0] + tmp[1] + tmp[2] + tmp[3]
-               + tmp[4] + tmp[5] + tmp[6] + tmp[7];
+    double dot = static_cast<double>(tmp[0]) + static_cast<double>(tmp[1])
+               + static_cast<double>(tmp[2]) + static_cast<double>(tmp[3])
+               + static_cast<double>(tmp[4]) + static_cast<double>(tmp[5])
+               + static_cast<double>(tmp[6]) + static_cast<double>(tmp[7]);
 
     for (; i < dim; ++i) {
-        dot += a[i] * b[i];
+        dot += static_cast<double>(a[i]) * static_cast<double>(b[i]);
     }
 
     return 1.0 - dot;
@@ -54,10 +56,11 @@ inline double ip_neon(const float* a, const float* b, std::size_t dim) {
 
     float tmp[4];
     vst1q_f32(tmp, sum);
-    double dot = tmp[0] + tmp[1] + tmp[2] + tmp[3];
+    double dot = static_cast<double>(tmp[0]) + static_cast<double>(tmp[1])
+               + static_cast<double>(tmp[2]) + static_cast<double>(tmp[3]);
 
     for (; i < dim; ++i) {
-        dot += a[i] * b[i];
+        dot += static_cast<double>(a[i]) * static_cast<double>(b[i]);
     }
 
     return 1.0 - dot;

@@ -11,8 +11,8 @@ inline double cosine_scalar(const float* a, const float* b, std::size_t dim) {
     double normB = 0.0;
 
     for (std::size_t i = 0; i < dim; ++i) {
-        double va = a[i];
-        double vb = b[i];
+        double va = static_cast<double>(a[i]);
+        double vb = static_cast<double>(b[i]);
         dot += va * vb;
         normA += va * va;
         normB += vb * vb;
@@ -51,16 +51,22 @@ inline double cosine_avx(const float* a, const float* b, std::size_t dim) {
     _mm256_storeu_ps(normATmp, normAVec);
     _mm256_storeu_ps(normBTmp, normBVec);
 
-    double dot = dotTmp[0] + dotTmp[1] + dotTmp[2] + dotTmp[3]
-               + dotTmp[4] + dotTmp[5] + dotTmp[6] + dotTmp[7];
-    double normA = normATmp[0] + normATmp[1] + normATmp[2] + normATmp[3]
-                 + normATmp[4] + normATmp[5] + normATmp[6] + normATmp[7];
-    double normB = normBTmp[0] + normBTmp[1] + normBTmp[2] + normBTmp[3]
-                 + normBTmp[4] + normBTmp[5] + normBTmp[6] + normBTmp[7];
+    double dot = static_cast<double>(dotTmp[0]) + static_cast<double>(dotTmp[1])
+               + static_cast<double>(dotTmp[2]) + static_cast<double>(dotTmp[3])
+               + static_cast<double>(dotTmp[4]) + static_cast<double>(dotTmp[5])
+               + static_cast<double>(dotTmp[6]) + static_cast<double>(dotTmp[7]);
+    double normA = static_cast<double>(normATmp[0]) + static_cast<double>(normATmp[1])
+                 + static_cast<double>(normATmp[2]) + static_cast<double>(normATmp[3])
+                 + static_cast<double>(normATmp[4]) + static_cast<double>(normATmp[5])
+                 + static_cast<double>(normATmp[6]) + static_cast<double>(normATmp[7]);
+    double normB = static_cast<double>(normBTmp[0]) + static_cast<double>(normBTmp[1])
+                 + static_cast<double>(normBTmp[2]) + static_cast<double>(normBTmp[3])
+                 + static_cast<double>(normBTmp[4]) + static_cast<double>(normBTmp[5])
+                 + static_cast<double>(normBTmp[6]) + static_cast<double>(normBTmp[7]);
 
     for (; i < dim; ++i) {
-        double va = a[i];
-        double vb = b[i];
+        double va = static_cast<double>(a[i]);
+        double vb = static_cast<double>(b[i]);
         dot += va * vb;
         normA += va * va;
         normB += vb * vb;
@@ -100,13 +106,16 @@ inline double cosine_neon(const float* a, const float* b, std::size_t dim) {
     vst1q_f32(normATmp, normAVec);
     vst1q_f32(normBTmp, normBVec);
 
-    double dot = dotTmp[0] + dotTmp[1] + dotTmp[2] + dotTmp[3];
-    double normA = normATmp[0] + normATmp[1] + normATmp[2] + normATmp[3];
-    double normB = normBTmp[0] + normBTmp[1] + normBTmp[2] + normBTmp[3];
+    double dot = static_cast<double>(dotTmp[0]) + static_cast<double>(dotTmp[1])
+               + static_cast<double>(dotTmp[2]) + static_cast<double>(dotTmp[3]);
+    double normA = static_cast<double>(normATmp[0]) + static_cast<double>(normATmp[1])
+                 + static_cast<double>(normATmp[2]) + static_cast<double>(normATmp[3]);
+    double normB = static_cast<double>(normBTmp[0]) + static_cast<double>(normBTmp[1])
+                 + static_cast<double>(normBTmp[2]) + static_cast<double>(normBTmp[3]);
 
     for (; i < dim; ++i) {
-        double va = a[i];
-        double vb = b[i];
+        double va = static_cast<double>(a[i]);
+        double vb = static_cast<double>(b[i]);
         dot += va * vb;
         normA += va * va;
         normB += vb * vb;

@@ -6,7 +6,7 @@
 inline double l2_scalar(const float* a, const float* b, std::size_t dim) {
     double sum = 0.0;
     for (std::size_t i = 0; i < dim; ++i) {
-        double d = a[i] - b[i];
+        double d = static_cast<double>(a[i]) - static_cast<double>(b[i]);
         sum += d * d;
     }
     return sum;
@@ -30,11 +30,13 @@ inline double l2_avx(const float* a, const float* b, std::size_t dim) {
     float tmp[8];
     _mm256_storeu_ps(tmp, sum);
 
-    double total = tmp[0] + tmp[1] + tmp[2] + tmp[3]
-                 + tmp[4] + tmp[5] + tmp[6] + tmp[7];
+    double total = static_cast<double>(tmp[0]) + static_cast<double>(tmp[1])
+                 + static_cast<double>(tmp[2]) + static_cast<double>(tmp[3])
+                 + static_cast<double>(tmp[4]) + static_cast<double>(tmp[5])
+                 + static_cast<double>(tmp[6]) + static_cast<double>(tmp[7]);
 
     for (; i < dim; ++i) {
-        double d = a[i] - b[i];
+        double d = static_cast<double>(a[i]) - static_cast<double>(b[i]);
         total += d * d;
     }
 
@@ -58,10 +60,11 @@ inline double l2_neon(const float* a, const float* b, std::size_t dim) {
 
     float tmp[4];
     vst1q_f32(tmp, sum);
-    double total = tmp[0] + tmp[1] + tmp[2] + tmp[3];
+    double total = static_cast<double>(tmp[0]) + static_cast<double>(tmp[1])
+                 + static_cast<double>(tmp[2]) + static_cast<double>(tmp[3]);
 
     for (; i < dim; ++i) {
-        double d = a[i] - b[i];
+        double d = static_cast<double>(a[i]) - static_cast<double>(b[i]);
         total += d * d;
     }
 

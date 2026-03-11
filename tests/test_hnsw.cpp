@@ -25,8 +25,8 @@ void expectDistFuncsClose(
         v2[i] = dist(gen);
     }
 
-    float ra = a(v1.data(), v2.data(), dim);
-    float rb = b(v1.data(), v2.data(), dim);
+    double ra = a(v1.data(), v2.data(), dim);
+    double rb = b(v1.data(), v2.data(), dim);
 
     if (isCosine) {
         EXPECT_NEAR(ra, rb, 1e-5f);
