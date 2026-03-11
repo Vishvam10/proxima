@@ -72,7 +72,7 @@ int main() {
         {false, "simd_mt", true}
     };
 
-    int numThreads = std::thread::hardware_concurrency();
+    int numThreads = static_cast<int>(std::thread::hardware_concurrency());
     if (numThreads == 0) numThreads = 4;
 
     cout << "\nC++ Benchmarks\n\n";
