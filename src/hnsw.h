@@ -87,5 +87,4 @@ class HnswCPU : public HnswIndex {
     int size() const override;
 
     void printInfo();
-
 };
