@@ -3,17 +3,17 @@ import platform
 import shutil
 import sys
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import Dict, Tuple
 
 Key = Tuple[str, int, int, int]  # (distance, dataset, dim, k)
 
 
-def load_cpp_results(path: Path) -> Tuple[Dict[Key, Dict], Dict[Key, Dict]]:
-    """Returns (simd_results, scalar_results) keyed by (distance, dataset, dim, k)."""
-    simd: Dict[Key, Dict] = {}
-    scalar: Dict[Key, Dict] = {}
+def load_cpp_results(path: Path) -> Dict[str, Dict[Key, Dict]]:
+    """Returns dict keyed by simd_mode, each containing results keyed by (distance, dataset, dim, k)."""
+    results: Dict[str, Dict[Key, Dict]] = {}
     with path.open(newline="") as f:
         for row in csv.DictReader(f):
+            simd_mode = row["simd_mode"]
             key: Key = (
                 row["distance"],
                 int(row["dataset"]),
@@ -23,13 +23,14 @@ def load_cpp_results(path: Path) -> Tuple[Dict[Key, Dict], Dict[Key, Dict]]:
             entry = {
                 "build_s": float(row["build_s"]),
                 "query_us": float(row["query_us"]),
+                "brute_query_us": float(row["brute_query_us"]),
+                "speedup": float(row["speedup"]),
                 "recall": float(row["recall"]),
             }
-            if row["simd_mode"] == "simd":
-                simd[key] = entry
-            else:
-                scalar[key] = entry
-    return simd, scalar
+            if simd_mode not in results:
+                results[simd_mode] = {}
+            results[simd_mode][key] = entry
+    return results
 
 
 def load_py_results(path: Path) -> Dict[Key, Dict]:
@@ -60,12 +61,12 @@ def pct_delta(test_val: float, base_val: float) -> float:
 
 
 def fmt_pct(delta: float, lower_is_better: bool = True) -> str:
-    """Format percentage with emoji. For times, lower is better (green = negative delta)."""
+    """Format percentage with indicator. For times, lower is better (green = negative delta)."""
     if lower_is_better:
-        emoji = "🟢" if delta < 0 else "🔴"
+        indicator = "[FASTER]" if delta < 0 else "[SLOWER]"
     else:
-        emoji = "🟢" if delta > 0 else "🔴"
-    return f"{emoji} {delta:+.1f}%"
+        indicator = "[BETTER]" if delta > 0 else "[WORSE]"
+    return f"{delta:+.1f}% {indicator}"
 
 
 def machine_info() -> str:
@@ -76,6 +77,86 @@ def machine_info() -> str:
         f"- **Platform**: {platform.platform()}",
     ]
     return "\n".join(lines)
+
+
+def compare_section(
+    title: str,
+    cpp_results: Dict[Key, Dict],
+    py_results: Dict[Key, Dict],
+    cpp_label: str,
+) -> list:
+    """Generate markdown comparison section."""
+    lines = [
+        f"## {title}",
+        "",
+        f"| Distance | Dataset | Dim | K | Python Build (s) | {cpp_label} Build (s) | Build Delta | Python Query (us) | {cpp_label} Query (us) | Query Delta | Python Recall | {cpp_label} Recall |",
+        "|----------|---------|-----|---|-----------------|----------------------|-------------|-------------------|----------------------|-------------|---------------|-----------------|",
+    ]
+
+    common_keys = sorted(set(cpp_results.keys()) & set(py_results.keys()))
+
+    for key in common_keys:
+        dist, n, d, k = key
+        cpp = cpp_results[key]
+        py = py_results[key]
+
+        build_delta = pct_delta(cpp["build_s"], py["build_s"])
+        query_delta = pct_delta(cpp["query_us"], py["query_us"])
+
+        lines.append(
+            f"| {dist} | {n} | {d} | {k} "
+            f"| {py['build_s']:.4f} | {cpp['build_s']:.4f} | {fmt_pct(build_delta)} "
+            f"| {py['query_us']:.3f} | {cpp['query_us']:.3f} | {fmt_pct(query_delta)} "
+            f"| {py['recall']:.4f} | {cpp['recall']:.4f} |"
+        )
+
+    return lines
+
+
+def summary_table(
+    cpp_by_mode: Dict[str, Dict[Key, Dict]],
+    py_results: Dict[Key, Dict],
+) -> list:
+    """Generate a summary table showing average improvements across all scenarios."""
+    lines = [
+        "## Summary (Average Percentage Improvements)",
+        "",
+        "| Mode | Avg Build Delta | Avg Query Delta |",
+        "|------|-----------------|-----------------|",
+    ]
+
+    mode_labels = {
+        "scalar": "C++ Scalar",
+        "simd": "C++ SIMD",
+        "simd_mt": "C++ SIMD + MT",
+    }
+
+    for mode in ["scalar", "simd", "simd_mt"]:
+        if mode not in cpp_by_mode:
+            continue
+
+        cpp_results = cpp_by_mode[mode]
+        common_keys = set(cpp_results.keys()) & set(py_results.keys())
+
+        if not common_keys:
+            continue
+
+        build_deltas = []
+        query_deltas = []
+
+        for key in common_keys:
+            cpp = cpp_results[key]
+            py = py_results[key]
+            build_deltas.append(pct_delta(cpp["build_s"], py["build_s"]))
+            query_deltas.append(pct_delta(cpp["query_us"], py["query_us"]))
+
+        avg_build = sum(build_deltas) / len(build_deltas)
+        avg_query = sum(query_deltas) / len(query_deltas)
+
+        label = mode_labels.get(mode, mode)
+        lines.append(f"| {label} | {fmt_pct(avg_build)} | {fmt_pct(avg_query)} |")
+
+    return lines
 
 
 def main() -> None:
@@ -95,95 +176,16 @@ def main() -> None:
     if not py_path.exists():
         raise SystemExit(f"Missing Python results file: {py_path}")
 
-    cpp = load_results(cpp_path)
-    py = load_results(py_path)
+    cpp_by_mode = load_cpp_results(cpp_path)
+    py = load_py_results(py_path)
 
-    all_keys = sorted(set(simd.keys()) | set(scalar.keys()) | set(py.keys()))
-
-    if not all_keys:
-        raise SystemExit("No benchmark results found.")
-
-    # Warn about missing scenarios
-    missing_cpp = py_keys - cpp_keys
-    missing_py = cpp_keys - py_keys
-
-    if missing_cpp:
-        print("Warning: scenarios present only in Python results (ignored):")
-        for n, d, k in sorted(missing_cpp):
-            print(f"  dataset={n}, dim={d}, k={k}")
-        print()
-
-    if missing_py:
-        print("Warning: scenarios present only in C++ results (ignored):")
-        for n, d, k in sorted(missing_py):
-            print(f"  dataset={n}, dim={d}, k={k}")
-        print()
-
-    header = (
-        f"{'Dataset':>7} | {'Dim':>4} | {'K':>3} | "
-        f"{'Build C++ (s)':>13} | {'Build Py (s)':>12} | {'ΔBuild':>7} | "
-        f"{'Query C++ (us)':>14} | {'Query Py (us)':>13} | {'ΔQuery':>7} | "
-        f"{'Brute C++ (us)':>14} | {'Brute Py (us)':>13} | "
-        f"{'Speedup C++':>11} | {'Speedup Py':>10} | "
-        f"{'Recall C++':>10} | {'Recall Py':>9}"
-    )
-    print()
-    print(header)
-    print("-" * len(header))
-
-    csv_rows = []
-    for n, d, k in common:
-        c = cpp[(n, d, k)]
-        p = py[(n, d, k)]
-
-        build_pct = percentage_str(c["build_s"], p["build_s"])
-        query_pct = percentage_str(c["query_us"], p["query_us"])
-
-        print(
-            f"{n:7d} | {d:4d} | {k:3d} | "
-            f"{c['build_s']:13.4f} | {p['build_s']:12.4f} | {build_pct:>7} | "
-            f"{c['query_us']:14.3f} | {p['query_us']:13.3f} | {query_pct:>7} | "
-            f"{c['brute_query_us']:14.3f} | {p['brute_query_us']:13.3f} | "
-            f"{c['speedup']:10.2f}x | {p['speedup']:9.2f}x | "
-            f"{c['recall']:10.4f} | {p['recall']:9.4f}"
-        )
-
-        csv_rows.append({
-            "dataset": n,
-            "dim": d,
-            "k": k,
-            "build_cpp_s": c["build_s"],
-            "build_py_s": p["build_s"],
-            "build_pct": build_pct,
-            "query_cpp_us": c["query_us"],
-            "query_py_us": p["query_us"],
-            "query_pct": query_pct,
-            "brute_cpp_us": c["brute_query_us"],
-            "brute_py_us": p["brute_query_us"],
-            "speedup_cpp": c["speedup"],
-            "speedup_py": p["speedup"],
-            "recall_cpp": c["recall"],
-            "recall_py": p["recall"],
-        })
-
-    with output_csv.open("w", newline="") as f:
-        fieldnames = [
-            "dataset", "dim", "k",
-            "build_cpp_s", "build_py_s", "build_pct",
-            "query_cpp_us", "query_py_us", "query_pct",
-            "brute_cpp_us", "brute_py_us",
-            "speedup_cpp", "speedup_py",
-            "recall_cpp", "recall_py",
-        ]
-        writer = csv.DictWriter(f, fieldnames=fieldnames)
-        writer.writeheader()
-        writer.writerows(csv_rows)
-
-    # --- README.md output ---
-    readme_path = results_dir / "README.md"
+    if not cpp_by_mode:
+        raise SystemExit("No C++ benchmark results found.")
+    if not py:
+        raise SystemExit("No Python benchmark results found.")
 
     md_lines = [
-        "# Benchmark Results",
+        "# Benchmark Comparison Results",
         "",
         f"**Date**: {results_name}",
         "",
@@ -191,78 +193,79 @@ def main() -> None:
         "",
         machine_info(),
         "",
-        "## Build Time Comparison",
-        "",
-        "| Distance | Dataset | Dim | K | C++ SIMD (s) | C++ Scalar (s) | Python (s) | SIMD vs Py | Scalar vs Py | SIMD vs Scalar |",
-        "|----------|---------|-----|---|-------------|----------------|------------|------------|--------------|----------------|",
     ]
 
-    for row in csv_rows:
-        bs = row["build_simd_s"]
-        bsc = row["build_scalar_s"]
-        bp = row["build_py_s"]
-
-        d_sp = fmt_pct(row["build_simd_vs_py_pct"], lower_is_better=True) if row["build_simd_vs_py_pct"] != "" else "N/A"
-        d_scp = fmt_pct(row["build_scalar_vs_py_pct"], lower_is_better=True) if row["build_scalar_vs_py_pct"] != "" else "N/A"
-        d_ss = fmt_pct(row["build_simd_vs_scalar_pct"], lower_is_better=True) if row["build_simd_vs_scalar_pct"] != "" else "N/A"
-
-        md_lines.append(
-            f"| {row['distance']} | {row['dataset']} | {row['dim']} | {row['k']} "
-            f"| {bs:.4f} | {bsc:.4f} | {bp:.4f} "
-            f"| {d_sp} | {d_scp} | {d_ss} |"
-            if bs != "" and bsc != "" and bp != ""
-            else f"| {row['distance']} | {row['dataset']} | {row['dim']} | {row['k']} "
-            f"| {bs} | {bsc} | {bp} "
-            f"| {d_sp} | {d_scp} | {d_ss} |"
-        )
-
-    md_lines += [
-        "",
-        "## Query Time Comparison",
-        "",
-        "| Distance | Dataset | Dim | K | C++ SIMD (us) | C++ Scalar (us) | Python (us) | SIMD vs Py | Scalar vs Py | SIMD vs Scalar |",
-        "|----------|---------|-----|---|--------------|-----------------|-------------|------------|--------------|----------------|",
-    ]
-
-    for row in csv_rows:
-        qs = row["query_simd_us"]
-        qsc = row["query_scalar_us"]
-        qp = row["query_py_us"]
-
-        d_sp = fmt_pct(row["query_simd_vs_py_pct"], lower_is_better=True) if row["query_simd_vs_py_pct"] != "" else "N/A"
-        d_scp = fmt_pct(row["query_scalar_vs_py_pct"], lower_is_better=True) if row["query_scalar_vs_py_pct"] != "" else "N/A"
-        d_ss = fmt_pct(row["query_simd_vs_scalar_pct"], lower_is_better=True) if row["query_simd_vs_scalar_pct"] != "" else "N/A"
-
-        md_lines.append(
-            f"| {row['distance']} | {row['dataset']} | {row['dim']} | {row['k']} "
-            f"| {qs:.3f} | {qsc:.3f} | {qp:.3f} "
-            f"| {d_sp} | {d_scp} | {d_ss} |"
-            if qs != "" and qsc != "" and qp != ""
-            else f"| {row['distance']} | {row['dataset']} | {row['dim']} | {row['k']} "
-            f"| {qs} | {qsc} | {qp} "
-            f"| {d_sp} | {d_scp} | {d_ss} |"
-        )
-
-    md_lines += [
-        "",
-        "## Recall Comparison",
-        "",
-        "| Distance | Dataset | Dim | K | C++ SIMD | C++ Scalar | Python |",
-        "|----------|---------|-----|---|----------|------------|--------|",
-    ]
-
-    for row in csv_rows:
-        rs = f"{row['recall_simd']:.4f}" if row["recall_simd"] != "" else "N/A"
-        rsc = f"{row['recall_scalar']:.4f}" if row["recall_scalar"] != "" else "N/A"
-        rp = f"{row['recall_py']:.4f}" if row["recall_py"] != "" else "N/A"
-        md_lines.append(
-            f"| {row['distance']} | {row['dataset']} | {row['dim']} | {row['k']} "
-            f"| {rs} | {rsc} | {rp} |"
-        )
-
+    md_lines.extend(summary_table(cpp_by_mode, py))
     md_lines.append("")
 
+    if "scalar" in cpp_by_mode:
+        md_lines.extend(compare_section(
+            "Python vs C++ Scalar",
+            cpp_by_mode["scalar"],
+            py,
+            "C++ Scalar"
+        ))
+        md_lines.append("")
+
+    if "simd" in cpp_by_mode:
+        md_lines.extend(compare_section(
+            "Python vs C++ SIMD",
+            cpp_by_mode["simd"],
+            py,
+            "C++ SIMD"
+        ))
+        md_lines.append("")
+
+    if "simd_mt" in cpp_by_mode:
+        md_lines.extend(compare_section(
+            "Python vs C++ Multithreaded + SIMD",
+            cpp_by_mode["simd_mt"],
+            py,
+            "C++ SIMD+MT"
+        ))
+        md_lines.append("")
+
+    csv_rows = []
+    for mode, cpp_results in cpp_by_mode.items():
+        common_keys = sorted(set(cpp_results.keys()) & set(py.keys()))
+        for key in common_keys:
+            dist, n, d, k = key
+            cpp = cpp_results[key]
+            p = py[key]
+
+            csv_rows.append({
+                "distance": dist,
+                "simd_mode": mode,
+                "dataset": n,
+                "dim": d,
+                "k": k,
+                "build_py_s": p["build_s"],
+                "build_cpp_s": cpp["build_s"],
+                "build_delta_pct": pct_delta(cpp["build_s"], p["build_s"]),
+                "query_py_us": p["query_us"],
+                "query_cpp_us": cpp["query_us"],
+                "query_delta_pct": pct_delta(cpp["query_us"], p["query_us"]),
+                "recall_py": p["recall"],
+                "recall_cpp": cpp["recall"],
+            })
+
+    csv_path = results_dir / "comparison.csv"
+    with csv_path.open("w", newline="") as f:
+        fieldnames = [
+            "distance", "simd_mode", "dataset", "dim", "k",
+            "build_py_s", "build_cpp_s", "build_delta_pct",
+            "query_py_us", "query_cpp_us", "query_delta_pct",
+            "recall_py", "recall_cpp",
+        ]
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
+        writer.writeheader()
+        writer.writerows(csv_rows)
+
+    readme_path = results_dir / "README.md"
     readme_path.write_text("\n".join(md_lines))
+
+    shutil.copy(cpp_path, results_dir / "cpp_results.csv")
+    shutil.copy(py_path, results_dir / "python_results.csv")
 
     print(f"\nResults saved to {results_dir}")
     print(f"  - {csv_path.name}")

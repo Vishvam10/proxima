@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <mutex>
 #include <random>
 #include <vector>
 
@@ -46,6 +47,8 @@ class HnswCPU : public HnswIndex {
     DistanceType distType;
     DistFunc distFunc;
 
+    mutable std::mutex graphMutex;
+
     int sampleLevel();
     double l2Distance(const vector<float> &a, const vector<float> &b) const;
 
@@ -78,6 +81,7 @@ class HnswCPU : public HnswIndex {
 
     void create(const vector<vector<float>> &data) override;
     void add(const vector<float> &embedding) override;
+    void addParallel(const vector<vector<float>> &data, int numThreads = 4);
     vector<int>
     search(const vector<float> &query, int k, int efSearch = 50) override;
     int size() const override;
