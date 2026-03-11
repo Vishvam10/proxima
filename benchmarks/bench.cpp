@@ -4,6 +4,7 @@
 #include <iomanip>
 #include <iostream>
 #include <random>
+#include <thread>
 #include <utility>
 #include <vector>
 
@@ -20,6 +21,17 @@ struct Scenario {
     size_t N;
     size_t DIM;
     size_t K;
+};
+
+struct DistConfig {
+    DistanceType type;
+    const char* name;
+};
+
+struct SimdMode {
+    bool forceScalar;
+    const char* label;
+    bool useMultithread;
 };
 
 vector<int> bruteForceKNN(const vector<vector<float>>& data,
@@ -48,19 +60,36 @@ int main() {
         {100000, 32, 10}
     };
 
+    vector<DistConfig> dists = {
+        {DistanceType::L2, "l2"},
+        {DistanceType::INNER_PRODUCT, "inner_product"},
+        {DistanceType::COSINE, "cosine"}
+    };
+
+    vector<SimdMode> modes = {
+        {true, "scalar", false},
+        {false, "simd", false},
+        {false, "simd_mt", true}
+    };
+
+    int numThreads = std::thread::hardware_concurrency();
+    if (numThreads == 0) numThreads = 4;
+
     cout << "\nC++ Benchmarks\n\n";
+    cout << "Hardware threads available: " << numThreads << "\n\n";
 
     cout << std::fixed << std::setprecision(4);
-    cout << "Dataset | Dim | K | Build (s) | Query (us) | Brute (us) | Speedup | Recall\n";
-    cout << "----------------------------------------------------------------------------\n";
+    cout << "Distance | Mode | Dataset | Dim | K | Build (s) | Query (us) | Brute (us) | Speedup | Recall\n";
+    cout << "----------------------------------------------------------------------------------------------\n";
 
     std::ofstream csv("benchmarks/cpp_results.csv");
-    csv << "dataset,dim,k,build_s,query_us,brute_query_us,speedup,recall\n";
+    csv << "distance,simd_mode,dataset,dim,k,build_s,query_us,brute_query_us,speedup,recall\n";
 
-        std::mt19937 gen(42);
+    std::mt19937 gen(42);
 
-        for (const auto& dcfg : dists) {
-            for (auto s : scenarios) {
+    for (const auto& dcfg : dists) {
+        for (const auto& mode : modes) {
+            for (const auto& s : scenarios) {
                 std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
                 vector<vector<float>> data(s.N, vector<float>(s.DIM));
@@ -71,14 +100,18 @@ int main() {
                 HnswCPU index(16, 200, 42, dcfg.type, mode.forceScalar);
 
                 auto t1 = high_resolution_clock::now();
-                index.create(data);
+                if (mode.useMultithread) {
+                    index.addParallel(data, numThreads);
+                } else {
+                    index.create(data);
+                }
                 auto t2 = high_resolution_clock::now();
-                auto build_time =
-                    duration_cast<microseconds>(t2 - t1).count() / 1e6;
+                double build_time = duration_cast<microseconds>(t2 - t1).count() / 1e6;
 
                 size_t total_correct = 0;
-                auto t3 = high_resolution_clock::now();
                 size_t query_count = std::min(size_t(100), s.N);
+
+                auto t3 = high_resolution_clock::now();
                 for (size_t i = 0; i < query_count; ++i) {
                     auto result = index.search(data[i], static_cast<int>(s.K), 200);
                     for (int id : result)
@@ -88,29 +121,32 @@ int main() {
                         }
                 }
                 auto t4 = high_resolution_clock::now();
-                auto query_time = duration_cast<microseconds>(t4 - t3).count()
-                                  / double(query_count);
+                double query_time = duration_cast<microseconds>(t4 - t3).count() / double(query_count);
 
-        double recall = static_cast<double>(total_correct) / query_count;
+                double recall = static_cast<double>(total_correct) / query_count;
 
-        auto t5 = high_resolution_clock::now();
-        for (size_t i = 0; i < query_count; ++i) {
-            bruteForceKNN(data, data[i], s.K);
+                auto t5 = high_resolution_clock::now();
+                for (size_t i = 0; i < query_count; ++i) {
+                    bruteForceKNN(data, data[i], s.K);
+                }
+                auto t6 = high_resolution_clock::now();
+                double brute_query_time = duration_cast<microseconds>(t6 - t5).count() / double(query_count);
+
+                double speedup = brute_query_time / query_time;
+
+                cout << dcfg.name << " | " << mode.label << " | "
+                     << s.N << " | " << s.DIM << " | " << s.K << " | "
+                     << build_time << " | " << query_time << " | "
+                     << brute_query_time << " | " << speedup << "x | " << recall << "\n";
+
+                csv << dcfg.name << "," << mode.label << "," << s.N << "," << s.DIM << "," << s.K << ","
+                    << build_time << "," << query_time << ","
+                    << brute_query_time << "," << speedup << "," << recall << "\n";
+            }
         }
-        auto t6 = high_resolution_clock::now();
-        auto brute_query_time =
-            duration_cast<microseconds>(t6 - t5).count() / double(query_count);
-
-        double speedup = brute_query_time / query_time;
-
-        cout << s.N << " | " << s.DIM << " | " << s.K << " | " << build_time
-             << " | " << query_time << " | " << brute_query_time
-             << " | " << speedup << "x | " << recall << "\n";
-
-        csv << s.N << "," << s.DIM << "," << s.K << ","
-            << build_time << "," << query_time << ","
-            << brute_query_time << "," << speedup << "," << recall << "\n";
     }
-    cout << "\n";
-}
 
+    cout << "\nResults saved to benchmarks/cpp_results.csv\n";
+
+    return 0;
+}

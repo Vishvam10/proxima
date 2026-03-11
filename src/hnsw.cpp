@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <queue>
+#include <thread>
 
 using std::pair;
 using std::priority_queue;
@@ -140,6 +141,8 @@ vector<int> HnswCPU::selectNeighborsWithHeuristic(
 
     vector<uint8_t> visited(nodes.size(), 0);
 
+    size_t queryLen = query.size();
+
     for (int cand : candidates) {
 
         if (!visited[cand]) {
@@ -203,6 +206,7 @@ void HnswCPU::create(const vector<vector<float>> &data) {
 }
 
 void HnswCPU::add(const vector<float> &embedding) {
+    std::lock_guard<std::mutex> lock(graphMutex);
 
     int nodeLevel = sampleLevel();
     int id = currentId++;
@@ -257,6 +261,32 @@ void HnswCPU::add(const vector<float> &embedding) {
     if (nodeLevel > maxLevel) {
         entryPoint = id;
         maxLevel = nodeLevel;
+    }
+}
+
+void HnswCPU::addParallel(const vector<vector<float>> &data, int numThreads) {
+    if (data.empty()) return;
+
+    vector<std::thread> threads;
+    size_t totalItems = data.size();
+    size_t nThreads = static_cast<size_t>(numThreads);
+    size_t itemsPerThread = (totalItems + nThreads - 1) / nThreads;
+
+    for (size_t t = 0; t < nThreads; ++t) {
+        size_t start = t * itemsPerThread;
+        size_t end = std::min(start + itemsPerThread, totalItems);
+
+        if (start >= totalItems) break;
+
+        threads.emplace_back([this, &data, start, end]() {
+            for (size_t i = start; i < end; ++i) {
+                add(data[i]);
+            }
+        });
+    }
+
+    for (auto &thread : threads) {
+        thread.join();
     }
 }
 
