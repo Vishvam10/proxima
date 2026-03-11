@@ -1,6 +1,6 @@
+#include <iomanip>
 #include <iostream>
 #include <random>
-#include <iomanip>
 
 #include "hnsw.h"
 
@@ -31,7 +31,8 @@ int main() {
     cout << "\n";
     cout << std::fixed << std::setprecision(4);
     cout << "Query vector (ID 123) : \n\n";
-    for (float v : query) cout << v << " ";
+    for (float v : query)
+        cout << v << " ";
     cout << "\n\n";
 
     cout << "Top 5 neighbors (ID, distance, vector) :\n\n";
@@ -42,10 +43,11 @@ int main() {
             double diff = query[j] - data[id][j];
             dist += diff * diff;
         }
-        dist = std::sqrt(dist);  // Euclidean distance
+        dist = std::sqrt(dist); // Euclidean distance
 
         cout << "ID " << id << ", distance : " << dist << "\nVector : ";
-        for (float v : data[id]) cout << v << " ";
+        for (float v : data[id])
+            cout << v << " ";
         cout << "\n\n";
     }
 
