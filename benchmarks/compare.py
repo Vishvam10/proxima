@@ -45,6 +45,8 @@ def load_py_results(path: Path) -> Dict[Key, Dict]:
             results[key] = {
                 "build_s": float(row["build_s"]),
                 "query_us": float(row["query_us"]),
+                "brute_query_us": float(row["brute_query_us"]),
+                "speedup": float(row["speedup"]),
                 "recall": float(row["recall"]),
             }
     return results
@@ -91,86 +93,89 @@ def main() -> None:
     if not cpp_path.exists():
         raise SystemExit(f"Missing C++ results: {cpp_path}")
     if not py_path.exists():
-        raise SystemExit(f"Missing Python results: {py_path}")
+        raise SystemExit(f"Missing Python results file: {py_path}")
 
-    shutil.copy2(cpp_path, results_dir / "cpp_results.csv")
-    shutil.copy2(py_path, results_dir / "python_results.csv")
-
-    simd, scalar = load_cpp_results(cpp_path)
-    py = load_py_results(py_path)
+    cpp = load_results(cpp_path)
+    py = load_results(py_path)
 
     all_keys = sorted(set(simd.keys()) | set(scalar.keys()) | set(py.keys()))
 
     if not all_keys:
         raise SystemExit("No benchmark results found.")
 
-    # --- CSV output ---
-    csv_path = results_dir / "comparison.csv"
-    csv_fields = [
-        "distance", "dataset", "dim", "k",
-        "build_simd_s", "build_scalar_s", "build_py_s",
-        "build_simd_vs_py_pct", "build_scalar_vs_py_pct", "build_simd_vs_scalar_pct",
-        "query_simd_us", "query_scalar_us", "query_py_us",
-        "query_simd_vs_py_pct", "query_scalar_vs_py_pct", "query_simd_vs_scalar_pct",
-        "recall_simd", "recall_scalar", "recall_py",
-    ]
+    # Warn about missing scenarios
+    missing_cpp = py_keys - cpp_keys
+    missing_py = cpp_keys - py_keys
 
-    csv_rows: List[Dict] = []
+    if missing_cpp:
+        print("Warning: scenarios present only in Python results (ignored):")
+        for n, d, k in sorted(missing_cpp):
+            print(f"  dataset={n}, dim={d}, k={k}")
+        print()
 
-    for key in all_keys:
-        dist, n, d, k = key
-        s = simd.get(key, {})
-        sc = scalar.get(key, {})
-        p = py.get(key, {})
+    if missing_py:
+        print("Warning: scenarios present only in C++ results (ignored):")
+        for n, d, k in sorted(missing_py):
+            print(f"  dataset={n}, dim={d}, k={k}")
+        print()
 
-        row = {"distance": dist, "dataset": n, "dim": d, "k": k}
+    header = (
+        f"{'Dataset':>7} | {'Dim':>4} | {'K':>3} | "
+        f"{'Build C++ (s)':>13} | {'Build Py (s)':>12} | {'ΔBuild':>7} | "
+        f"{'Query C++ (us)':>14} | {'Query Py (us)':>13} | {'ΔQuery':>7} | "
+        f"{'Brute C++ (us)':>14} | {'Brute Py (us)':>13} | "
+        f"{'Speedup C++':>11} | {'Speedup Py':>10} | "
+        f"{'Recall C++':>10} | {'Recall Py':>9}"
+    )
+    print()
+    print(header)
+    print("-" * len(header))
 
-        row["build_simd_s"] = s.get("build_s", "")
-        row["build_scalar_s"] = sc.get("build_s", "")
-        row["build_py_s"] = p.get("build_s", "")
+    csv_rows = []
+    for n, d, k in common:
+        c = cpp[(n, d, k)]
+        p = py[(n, d, k)]
 
-        if s.get("build_s") is not None and p.get("build_s") is not None:
-            row["build_simd_vs_py_pct"] = round(pct_delta(s["build_s"], p["build_s"]), 1)
-        else:
-            row["build_simd_vs_py_pct"] = ""
+        build_pct = percentage_str(c["build_s"], p["build_s"])
+        query_pct = percentage_str(c["query_us"], p["query_us"])
 
-        if sc.get("build_s") is not None and p.get("build_s") is not None:
-            row["build_scalar_vs_py_pct"] = round(pct_delta(sc["build_s"], p["build_s"]), 1)
-        else:
-            row["build_scalar_vs_py_pct"] = ""
+        print(
+            f"{n:7d} | {d:4d} | {k:3d} | "
+            f"{c['build_s']:13.4f} | {p['build_s']:12.4f} | {build_pct:>7} | "
+            f"{c['query_us']:14.3f} | {p['query_us']:13.3f} | {query_pct:>7} | "
+            f"{c['brute_query_us']:14.3f} | {p['brute_query_us']:13.3f} | "
+            f"{c['speedup']:10.2f}x | {p['speedup']:9.2f}x | "
+            f"{c['recall']:10.4f} | {p['recall']:9.4f}"
+        )
 
-        if s.get("build_s") is not None and sc.get("build_s") is not None:
-            row["build_simd_vs_scalar_pct"] = round(pct_delta(s["build_s"], sc["build_s"]), 1)
-        else:
-            row["build_simd_vs_scalar_pct"] = ""
+        csv_rows.append({
+            "dataset": n,
+            "dim": d,
+            "k": k,
+            "build_cpp_s": c["build_s"],
+            "build_py_s": p["build_s"],
+            "build_pct": build_pct,
+            "query_cpp_us": c["query_us"],
+            "query_py_us": p["query_us"],
+            "query_pct": query_pct,
+            "brute_cpp_us": c["brute_query_us"],
+            "brute_py_us": p["brute_query_us"],
+            "speedup_cpp": c["speedup"],
+            "speedup_py": p["speedup"],
+            "recall_cpp": c["recall"],
+            "recall_py": p["recall"],
+        })
 
-        row["query_simd_us"] = s.get("query_us", "")
-        row["query_scalar_us"] = sc.get("query_us", "")
-        row["query_py_us"] = p.get("query_us", "")
-
-        if s.get("query_us") is not None and p.get("query_us") is not None:
-            row["query_simd_vs_py_pct"] = round(pct_delta(s["query_us"], p["query_us"]), 1)
-        else:
-            row["query_simd_vs_py_pct"] = ""
-
-        if sc.get("query_us") is not None and p.get("query_us") is not None:
-            row["query_scalar_vs_py_pct"] = round(pct_delta(sc["query_us"], p["query_us"]), 1)
-        else:
-            row["query_scalar_vs_py_pct"] = ""
-
-        if s.get("query_us") is not None and sc.get("query_us") is not None:
-            row["query_simd_vs_scalar_pct"] = round(pct_delta(s["query_us"], sc["query_us"]), 1)
-        else:
-            row["query_simd_vs_scalar_pct"] = ""
-
-        row["recall_simd"] = s.get("recall", "")
-        row["recall_scalar"] = sc.get("recall", "")
-        row["recall_py"] = p.get("recall", "")
-
-        csv_rows.append(row)
-
-    with csv_path.open("w", newline="") as f:
-        writer = csv.DictWriter(f, fieldnames=csv_fields)
+    with output_csv.open("w", newline="") as f:
+        fieldnames = [
+            "dataset", "dim", "k",
+            "build_cpp_s", "build_py_s", "build_pct",
+            "query_cpp_us", "query_py_us", "query_pct",
+            "brute_cpp_us", "brute_py_us",
+            "speedup_cpp", "speedup_py",
+            "recall_cpp", "recall_py",
+        ]
+        writer = csv.DictWriter(f, fieldnames=fieldnames)
         writer.writeheader()
         writer.writerows(csv_rows)
 

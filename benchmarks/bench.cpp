@@ -1,8 +1,10 @@
+#include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <random>
+#include <utility>
 #include <vector>
 
 #include "hnsw.h"
@@ -20,15 +22,22 @@ struct Scenario {
     size_t K;
 };
 
-struct DistConfig {
-    DistanceType type;
-    const char* label;
-};
-
-struct SimdMode {
-    const char* label;
-    bool forceScalar;
-};
+vector<int> bruteForceKNN(const vector<vector<float>>& data,
+                          const vector<float>& query, size_t k) {
+    vector<std::pair<float, int>> dists(data.size());
+    for (size_t i = 0; i < data.size(); ++i) {
+        float d = 0;
+        for (size_t j = 0; j < query.size(); ++j) {
+            float diff = data[i][j] - query[j];
+            d += diff * diff;
+        }
+        dists[i] = {d, static_cast<int>(i)};
+    }
+    std::partial_sort(dists.begin(), dists.begin() + static_cast<ptrdiff_t>(k), dists.end());
+    vector<int> result(k);
+    for (size_t i = 0; i < k; ++i) result[i] = dists[i].second;
+    return result;
+}
 
 int main() {
     vector<Scenario> scenarios = {
@@ -39,28 +48,14 @@ int main() {
         {100000, 32, 10}
     };
 
-    vector<DistConfig> dists = {
-        {DistanceType::L2, "l2"},
-        {DistanceType::INNER_PRODUCT, "inner_product"},
-        {DistanceType::COSINE, "cosine"},
-    };
+    cout << "\nC++ Benchmarks\n\n";
 
-    vector<SimdMode> modes = {
-        {"simd", false},
-        {"scalar", true},
-    };
+    cout << std::fixed << std::setprecision(4);
+    cout << "Dataset | Dim | K | Build (s) | Query (us) | Brute (us) | Speedup | Recall\n";
+    cout << "----------------------------------------------------------------------------\n";
 
     std::ofstream csv("benchmarks/cpp_results.csv");
-    csv << "simd_mode,distance,dataset,dim,k,build_s,query_us,recall\n";
-
-    cout << "\nC++ Benchmarks\n";
-    printSimdInfo();
-    cout << std::fixed << std::setprecision(4);
-
-    for (const auto& mode : modes) {
-        cout << "\n[" << mode.label << "]\n";
-        cout << "Distance        | Dataset | Dim | K | Build (s) | Query (us) | Recall\n";
-        cout << "------------------------------------------------------------------------\n";
+    csv << "dataset,dim,k,build_s,query_us,brute_query_us,speedup,recall\n";
 
         std::mt19937 gen(42);
 
@@ -96,18 +91,26 @@ int main() {
                 auto query_time = duration_cast<microseconds>(t4 - t3).count()
                                   / double(query_count);
 
-                double recall = static_cast<double>(total_correct) / query_count;
+        double recall = static_cast<double>(total_correct) / query_count;
 
-                cout << std::left << std::setw(15) << dcfg.label << " | "
-                     << std::right << s.N << " | " << s.DIM << " | "
-                     << s.K << " | " << build_time << " | " << query_time
-                     << " | " << recall << "\n";
-
-                csv << mode.label << "," << dcfg.label << "," << s.N << ","
-                    << s.DIM << "," << s.K << "," << build_time << ","
-                    << query_time << "," << recall << "\n";
-            }
+        auto t5 = high_resolution_clock::now();
+        for (size_t i = 0; i < query_count; ++i) {
+            bruteForceKNN(data, data[i], s.K);
         }
-        cout << "\n";
+        auto t6 = high_resolution_clock::now();
+        auto brute_query_time =
+            duration_cast<microseconds>(t6 - t5).count() / double(query_count);
+
+        double speedup = brute_query_time / query_time;
+
+        cout << s.N << " | " << s.DIM << " | " << s.K << " | " << build_time
+             << " | " << query_time << " | " << brute_query_time
+             << " | " << speedup << "x | " << recall << "\n";
+
+        csv << s.N << "," << s.DIM << "," << s.K << ","
+            << build_time << "," << query_time << ","
+            << brute_query_time << "," << speedup << "," << recall << "\n";
     }
+    cout << "\n";
 }
+
