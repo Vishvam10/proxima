@@ -8,6 +8,7 @@
 #include "dist/dispatch.h"
 
 using std::vector;
+using std::mutex;
 
 class Node {
   public:
@@ -37,17 +38,16 @@ class HnswCPU : public HnswIndex {
     double levelMultiplier;
 
     vector<Node> nodes;
+    vector<mutex> nodeLockPool;
     int entryPoint;
     int maxLevel;
-    int currentId;
+    std::atomic<int> currentId;
 
     std::mt19937 gen;
     std::uniform_real_distribution<float> uniform_dist;
 
     DistanceType distType;
     DistFunc distFunc;
-
-    mutable std::mutex graphMutex;
 
     int sampleLevel();
     double l2Distance(const vector<float> &a, const vector<float> &b) const;
