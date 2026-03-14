@@ -9,13 +9,7 @@ using std::pair;
 using std::priority_queue;
 using std::vector;
 
-using std::thread;
-using std::lock_guard;
-using std::mutex;
-
 using DistanceIndexPair = pair<double, int>;
-
-const int MAX_NODE_LOCKS = 65536;
 
 Node::Node(int id_, int level_, const vector<float> &emb) :
     id(id_),
@@ -40,8 +34,7 @@ HnswCPU::HnswCPU(
     currentId(0),
     gen(seed),
     uniform_dist(0.0f, 1.0f),
-    distType(distType),
-    nodeLockPool(MAX_NODE_LOCKS) {
+    distType(distType) {
     distFunc = getDistanceFunction(distType, forceScalar);
 }
 
@@ -143,7 +136,7 @@ vector<int> HnswCPU::selectNeighbors(
 
 vector<int> HnswCPU::selectNeighborsWithHeuristic(
     const vector<float> &query,
-    const vector<int> &candidates,
+    const vector<int> candidates,
     int max_neighbours,
     int layer,
     bool extendCandidates,
@@ -232,12 +225,9 @@ void HnswCPU::create(const vector<vector<float>> &data) {
 void HnswCPU::add(const vector<float> &embedding) {
 
     int nodeLevel = sampleLevel();
-    int id = currentId.fetch_add(1);
+    int id = currentId++;
 
-    {
-        lock_guard<mutex> lock(nodeLock);
-        nodes.emplace_back(id, nodeLevel, embedding);
-    }
+    nodes.emplace_back(id, nodeLevel, embedding);
 
     if (currentId == 1) {
         entryPoint = 0;
@@ -263,10 +253,7 @@ void HnswCPU::add(const vector<float> &embedding) {
         size_t ind = static_cast<size_t>(id);
         size_t lvl = static_cast<size_t>(level);
 
-        {
-            lock_guard<mutex> lock(nodeLockPool[ind % MAX_NODE_LOCKS]);
-            nodes[ind].neighbors[lvl] = selected;
-        }
+        nodes[ind].neighbors[lvl] = selected;
 
         for (int nid : selected) {
             size_t nidIdx = static_cast<size_t>(nid);
@@ -274,61 +261,25 @@ void HnswCPU::add(const vector<float> &embedding) {
             if (nodes[nidIdx].level < level)
                 continue;
 
-            {
-                lock_guard<mutex> lock(nodeLockPool[nid % MAX_NODE_LOCKS]);
+            auto &neighList = nodes[nidIdx].neighbors[lvl];
+            neighList.push_back(id);
 
-                auto &neighList = nodes[nidIdx].neighbors[lvl];
-                neighList.push_back(id);
-                
-                if (static_cast<int>(neighList.size()) > maxNeighbors) {
-                    neighList = selectNeighborsWithHeuristic(
-                        nodes[nidIdx].embedding,
-                        neighList,
-                        maxNeighbors,
-                        level,
-                        true,
-                        true
-                    );
-                }   
+            if (static_cast<int>(neighList.size()) > maxNeighbors) {
+                neighList = selectNeighborsWithHeuristic(
+                    nodes[nidIdx].embedding,
+                    neighList,
+                    maxNeighbors,
+                    level,
+                    true,
+                    true
+                );
             }
         }
     }
 
-    {
-        lock_guard<mutex> lock(levelLock);
-        if (nodeLevel > maxLevel) {
-            entryPoint = id;
-            maxLevel = nodeLevel;
-        }
-    }
-
-}
-
-void HnswCPU::addParallel(const vector<vector<float>> &data, int numThreads) {
-    if (data.empty())
-        return;
-
-    vector<thread> threads;
-    size_t totalItems = data.size();
-    size_t nThreads = static_cast<size_t>(numThreads);
-    size_t itemsPerThread = (totalItems + nThreads - 1) / nThreads;
-
-    for (size_t t = 0; t < nThreads; ++t) {
-        size_t start = t * itemsPerThread;
-        size_t end = std::min(start + itemsPerThread, totalItems);
-
-        if (start >= totalItems)
-            break;
-
-        threads.emplace_back([this, &data, start, end]() {
-            for (size_t i = start; i < end; ++i) {
-                add(data[i]);
-            }
-        });
-    }
-
-    for (auto &thread : threads) {
-        thread.join();
+    if (nodeLevel > maxLevel) {
+        entryPoint = id;
+        maxLevel = nodeLevel;
     }
 }
 

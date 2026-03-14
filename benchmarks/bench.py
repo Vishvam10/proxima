@@ -19,25 +19,44 @@ DISTANCES = [
     ("cosine", "cosine"),
 ]
 
+COLS = [
+    ("Distance", 14),
+    ("Dataset", 10),
+    ("Dim", 6),
+    ("K", 4),
+    ("Build(s)", 10),
+    ("Query(us)", 11),
+    ("Brute(us)", 11),
+    ("Speedup", 9),
+    ("Recall", 8),
+]
+
 
 def main() -> None:
     base_dir = Path(__file__).resolve().parent
     csv_path = base_dir / "python_results.csv"
 
     print()
-    print("Python Benchmarks")
-    print(
-        f"{'Distance':>12} | {'Dataset':>6} | {'Dim':>3} | {'K':>2} | "
-        f"{'Build (s)':>9} | {'Query (us)':>10} | "
-        f"{'Brute (us)':>10} | {'Speedup':>7} | {'Recall':>6}"
-    )
-    print("-" * 100)
+    print("Python Benchmarks\n")
+
+    header = "".join(f"{name:<{w}}" for name, w in COLS)
+    print(header)
+    print("-" * sum(w for _, w in COLS))
 
     with csv_path.open("w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(
-            ["distance", "dataset", "dim", "k", "build_s", "query_us",
-             "brute_query_us", "speedup", "recall"]
+            [
+                "distance",
+                "dataset",
+                "dim",
+                "k",
+                "build_s",
+                "query_us",
+                "brute_query_us",
+                "speedup",
+                "recall",
+            ]
         )
 
         for space, dist_label in DISTANCES:
@@ -59,6 +78,7 @@ def main() -> None:
                 t3 = time.time()
                 labels, _ = index.knn_query(q, k=K)
                 t4 = time.time()
+
                 query_time = (t4 - t3) / len(q) * 1e6
 
                 recall = float(np.mean([i in labels[i] for i in range(len(q))]))
@@ -68,19 +88,45 @@ def main() -> None:
                     dists = np.sum((data - q[i]) ** 2, axis=1)
                     np.argpartition(dists, K)[:K]
                 t6 = time.time()
+
                 brute_query_time = (t6 - t5) / len(q) * 1e6
 
                 speedup = brute_query_time / query_time
 
-                print(
-                    f"{dist_label:>12} | {N:6} | {DIM:3} | {K:2} | "
-                    f"{build_time:9.4f} | {query_time:10.3f} | "
-                    f"{brute_query_time:10.3f} | {speedup:6.2f}x | {recall:6.4f}"
-                )
+                build_i = round(build_time)
+                query_i = round(query_time)
+                brute_i = round(brute_query_time)
+                speed_i = round(speedup)
+                recall_i = round(recall * 100)
+
+                row = [
+                    dist_label,
+                    N,
+                    DIM,
+                    K,
+                    build_i,
+                    query_i,
+                    brute_i,
+                    speed_i,
+                    recall_i,
+                ]
+
+                line = "".join(f"{str(val):<{w}}" for val, (_, w) in zip(row, COLS))
+
+                print(line)
 
                 writer.writerow(
-                    [dist_label, N, DIM, K, build_time, query_time,
-                     brute_query_time, speedup, recall]
+                    [
+                        dist_label,
+                        N,
+                        DIM,
+                        K,
+                        build_time,
+                        query_time,
+                        brute_query_time,
+                        speedup,
+                        recall,
+                    ]
                 )
 
     print()

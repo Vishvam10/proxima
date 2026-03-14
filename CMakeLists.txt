@@ -25,6 +25,8 @@ if (CMAKE_CXX_COMPILER_ID MATCHES "Clang|AppleClang|GNU")
         -Woverloaded-virtual
         -Wnull-dereference
         -Wdouble-promotion
+        -fsanitize=address,undefined
+        -fno-omit-frame-pointer
         # -Werror
     )
 endif()

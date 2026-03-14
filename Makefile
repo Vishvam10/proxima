@@ -70,9 +70,12 @@ rebuild: clean build
 scratchpad:
 	@echo "Compiling and running scratchpad..."
 	@mkdir -p $(BUILD_DIR)
-	@clang++ -std=c++17 -O3 -Isrc $(SRC) -o $(BUILD_DIR)/scratchpad
+	@clang++ -std=c++17 -g -O1 \
+	-fsanitize=address,undefined \
+	-fsanitize-address-use-after-scope \
+	-fno-omit-frame-pointer \
+	-Isrc $(SRC) -o $(BUILD_DIR)/scratchpad
 	@$(BUILD_DIR)/scratchpad
-
 # --------------------------------
 # Run tests
 # --------------------------------
