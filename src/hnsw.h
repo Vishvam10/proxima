@@ -39,6 +39,10 @@ class HnswCPU : public HnswIndex {
 
     vector<Node> nodes;
     vector<mutex> nodeLockPool;
+    
+    mutex levelLock;
+    mutex nodeLock;
+
     int entryPoint;
     int maxLevel;
     std::atomic<int> currentId;
