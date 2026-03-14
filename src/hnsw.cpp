@@ -8,8 +8,12 @@
 using std::pair;
 using std::priority_queue;
 using std::vector;
+using std::lock_guard;
+using std::mutex;
 
 using DistanceIndexPair = pair<double, int>;
+
+const int MAX_NODE_LOCKS = 65536;
 
 Node::Node(int id_, int level_, const vector<float> &emb) :
     id(id_),
@@ -34,7 +38,8 @@ HnswCPU::HnswCPU(
     currentId(0),
     gen(seed),
     uniform_dist(0.0f, 1.0f),
-    distType(distType) {
+    distType(distType),
+    nodeLockPool(MAX_NODE_LOCKS) {
     distFunc = getDistanceFunction(distType, forceScalar);
 }
 
@@ -223,12 +228,14 @@ void HnswCPU::create(const vector<vector<float>> &data) {
 }
 
 void HnswCPU::add(const vector<float> &embedding) {
-    std::lock_guard<std::mutex> lock(graphMutex);
 
     int nodeLevel = sampleLevel();
-    int id = currentId++;
+    int id = currentId.fetch_add(1);
 
-    nodes.emplace_back(id, nodeLevel, embedding);
+    {
+        lock_guard<mutex> lock(nodeLockPool[id % MAX_NODE_LOCKS]);
+        nodes.emplace_back(id, nodeLevel, embedding);
+    }
 
     if (currentId == 1) {
         entryPoint = 0;
@@ -245,16 +252,19 @@ void HnswCPU::add(const vector<float> &embedding) {
     for (int level = std::min(nodeLevel, maxLevel); level >= 0; --level) {
 
         int maxNeighbors = (level == 0) ? M0 : M;
-
         auto layerNodes = searchLayer(embedding, curr, efConstruction, level);
 
         auto selected = selectNeighborsWithHeuristic(
             embedding, layerNodes, maxNeighbors, level, true, true
         );
 
-        size_t idIdx = static_cast<size_t>(id);
+        size_t ind = static_cast<size_t>(id);
         size_t lvl = static_cast<size_t>(level);
-        nodes[idIdx].neighbors[lvl] = selected;
+
+        {
+            lock_guard<mutex> lock(nodeLockPool[ind % MAX_NODE_LOCKS]);
+            nodes[ind].neighbors[lvl] = selected;
+        }
 
         for (int nid : selected) {
             size_t nidIdx = static_cast<size_t>(nid);
@@ -262,19 +272,24 @@ void HnswCPU::add(const vector<float> &embedding) {
             if (nodes[nidIdx].level < level)
                 continue;
 
-            auto &neighList = nodes[nidIdx].neighbors[lvl];
-            neighList.push_back(id);
+            {
+                lock_guard<mutex> lock(nodeLockPool[nid % MAX_NODE_LOCKS]);
 
-            if (static_cast<int>(neighList.size()) > maxNeighbors) {
-                neighList = selectNeighborsWithHeuristic(
-                    nodes[nidIdx].embedding,
-                    neighList,
-                    maxNeighbors,
-                    level,
-                    true,
-                    true
-                );
+                auto &neighList = nodes[nidIdx].neighbors[lvl];
+                neighList.push_back(id);
+    
+                if (static_cast<int>(neighList.size()) > maxNeighbors) {
+                    neighList = selectNeighborsWithHeuristic(
+                        nodes[nidIdx].embedding,
+                        neighList,
+                        maxNeighbors,
+                        level,
+                        true,
+                        true
+                    );
+                }
             }
+
         }
     }
 
