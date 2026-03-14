@@ -38,14 +38,10 @@ class HnswCPU : public HnswIndex {
     double levelMultiplier;
 
     vector<Node> nodes;
-    vector<mutex> nodeLockPool;
-    
-    mutex levelLock;
-    mutex nodeLock;
 
     int entryPoint;
     int maxLevel;
-    std::atomic<int> currentId;
+    int currentId;
 
     std::mt19937 gen;
     std::uniform_real_distribution<float> uniform_dist;
@@ -67,7 +63,7 @@ class HnswCPU : public HnswIndex {
 
     vector<int> selectNeighborsWithHeuristic(
         const vector<float> &query,
-        const vector<int> &candidates,
+        const vector<int> candidates,
         int max_neighbours,
         int layer,
         bool extendCandidates,
@@ -85,7 +81,6 @@ class HnswCPU : public HnswIndex {
 
     void create(const vector<vector<float>> &data) override;
     void add(const vector<float> &embedding) override;
-    void addParallel(const vector<vector<float>> &data, int numThreads = 4);
     vector<int>
     search(const vector<float> &query, int k, int efSearch = 50) override;
     int size() const override;
