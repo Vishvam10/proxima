@@ -8,6 +8,8 @@
 using std::pair;
 using std::priority_queue;
 using std::vector;
+
+using std::thread;
 using std::lock_guard;
 using std::mutex;
 
@@ -233,7 +235,7 @@ void HnswCPU::add(const vector<float> &embedding) {
     int id = currentId.fetch_add(1);
 
     {
-        lock_guard<mutex> lock(nodeLockPool[id % MAX_NODE_LOCKS]);
+        lock_guard<mutex> lock(nodeLock);
         nodes.emplace_back(id, nodeLevel, embedding);
     }
 
@@ -277,7 +279,7 @@ void HnswCPU::add(const vector<float> &embedding) {
 
                 auto &neighList = nodes[nidIdx].neighbors[lvl];
                 neighList.push_back(id);
-    
+                
                 if (static_cast<int>(neighList.size()) > maxNeighbors) {
                     neighList = selectNeighborsWithHeuristic(
                         nodes[nidIdx].embedding,
@@ -287,23 +289,26 @@ void HnswCPU::add(const vector<float> &embedding) {
                         true,
                         true
                     );
-                }
+                }   
             }
-
         }
     }
 
-    if (nodeLevel > maxLevel) {
-        entryPoint = id;
-        maxLevel = nodeLevel;
+    {
+        lock_guard<mutex> lock(levelLock);
+        if (nodeLevel > maxLevel) {
+            entryPoint = id;
+            maxLevel = nodeLevel;
+        }
     }
+
 }
 
 void HnswCPU::addParallel(const vector<vector<float>> &data, int numThreads) {
     if (data.empty())
         return;
 
-    vector<std::thread> threads;
+    vector<thread> threads;
     size_t totalItems = data.size();
     size_t nThreads = static_cast<size_t>(numThreads);
     size_t itemsPerThread = (totalItems + nThreads - 1) / nThreads;
