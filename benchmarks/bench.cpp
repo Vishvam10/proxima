@@ -76,14 +76,14 @@ int main() {
         {1000, 128, 10},
         {5000, 64, 10},
         {10000, 32, 5},
-        {50000, 64, 10},
-        {100000, 32, 10}
+        // {50000, 64, 10},
+        // {100000, 32, 10}
     };
 
     vector<DistConfig> dists = {
         {DistanceType::L2, "l2"},
-        {DistanceType::INNER_PRODUCT, "inner_product"},
-        {DistanceType::COSINE, "cosine"}
+        // {DistanceType::INNER_PRODUCT, "inner_product"},
+        // {DistanceType::COSINE, "cosine"}
     };
 
     vector<SimdMode> modes = {
@@ -150,10 +150,7 @@ int main() {
 
                 auto t1 = high_resolution_clock::now();
 
-                if (mode.useMultithread)
-                    index.addParallel(data, numThreads);
-                else
-                    index.create(data);
+                index.create(data);
 
                 auto t2 = high_resolution_clock::now();
 
