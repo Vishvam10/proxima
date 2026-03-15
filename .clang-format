@@ -1,7 +1,10 @@
 BasedOnStyle: LLVM
 BreakBeforeBraces: Attach
 IndentWidth: 4
+ContinuationIndentWidth: 4
 ColumnLimit: 80
+MaxEmptyLinesToKeep: 1
+
 
 # Force break after function '('
 BinPackParameters: false
