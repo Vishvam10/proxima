@@ -1,41 +1,32 @@
 #include "hnsw.h"
-
 #include <algorithm>
 #include <cmath>
 #include <queue>
-#include <thread>
 
 using std::pair;
 using std::priority_queue;
 using std::vector;
-
 using DistanceIndexPair = pair<double, int>;
-
-Node::Node(int id_, int level_, const vector<float> &emb) :
-    id(id_),
-    level(level_),
-    embedding(emb) {
-    neighbors.resize(static_cast<size_t>(level) + 1);
-}
 
 HnswCPU::HnswCPU(
     int M_,
     int efConstruction_,
     uint32_t seed,
-    DistanceType distType,
+    DistanceType distType_,
     bool forceScalar
 ) :
     M(M_),
     M0(2 * M_),
     efConstruction(efConstruction_),
-    levelMultiplier(1.0 / std::log(static_cast<double>(M_))),
-    entryPoint(0),
+    levelMultiplier(1.0 / std::log(double(M_))),
+    entryPoint(-1),
     maxLevel(0),
     currentId(0),
     gen(seed),
     uniform_dist(0.0f, 1.0f),
-    distType(distType) {
+    distType(distType_) {
     distFunc = getDistanceFunction(distType, forceScalar);
+    dim = 0;
 }
 
 int HnswCPU::sampleLevel() {
@@ -44,51 +35,35 @@ int HnswCPU::sampleLevel() {
 }
 
 vector<int>
-HnswCPU::searchLayer(const vector<float> &query, int entry, int ef, int level) {
-
+HnswCPU::searchLayer(const float *query, int entry, int ef, int level) {
     priority_queue<DistanceIndexPair, vector<DistanceIndexPair>, std::greater<>>
         candidates;
     priority_queue<DistanceIndexPair> topResults;
-
     vector<uint8_t> visited(nodes.size(), 0);
 
-    size_t queryLen = query.size();
-    size_t entryIdx = static_cast<size_t>(entry);
-    size_t lvl = static_cast<size_t>(level);
-    double dist =
-        distFunc(query.data(), nodes[entryIdx].embedding.data(), queryLen);
-
+    double dist = distFunc(query, getEmbedding(entry), dim);
     candidates.push({dist, entry});
     topResults.push({dist, entry});
-    visited[entryIdx] = 1;
+    visited[entry] = 1;
+
+    size_t lvl = static_cast<size_t>(level);
 
     while (!candidates.empty()) {
-
         auto [currDist, currId] = candidates.top();
         candidates.pop();
-
         if (currDist > topResults.top().first)
             break;
 
-        for (int nei : nodes[static_cast<size_t>(currId)].neighbors[lvl]) {
-            size_t neiIdx = static_cast<size_t>(nei);
-
-            if (visited[neiIdx])
+        for (int nei : nodes[currId].neighbors[lvl]) {
+            if (visited[nei])
                 continue;
+            visited[nei] = 1;
+            double d = distFunc(query, getEmbedding(nei), dim);
 
-            visited[neiIdx] = 1;
-
-            double d = distFunc(
-                query.data(), nodes[neiIdx].embedding.data(), queryLen
-            );
-
-            if (static_cast<int>(topResults.size()) < ef ||
-                d < topResults.top().first) {
-
+            if ((int)topResults.size() < ef || d < topResults.top().first) {
                 candidates.push({d, nei});
                 topResults.push({d, nei});
-
-                if (static_cast<int>(topResults.size()) > ef)
+                if ((int)topResults.size() > ef)
                     topResults.pop();
             }
         }
@@ -99,174 +74,131 @@ HnswCPU::searchLayer(const vector<float> &query, int entry, int ef, int level) {
         result.push_back(topResults.top().second);
         topResults.pop();
     }
-
     return result;
 }
 
 vector<int> HnswCPU::selectNeighbors(
-    const vector<float> &query,
+    const float *query,
     const vector<int> &candidates,
     int max_neighbours
 ) {
-
     vector<pair<double, int>> distList;
-    size_t queryLen = query.size();
-
     for (int id : candidates) {
-        double d = distFunc(
-            query.data(),
-            nodes[static_cast<size_t>(id)].embedding.data(),
-            queryLen
-        );
+        double d = distFunc(query, getEmbedding(id), dim);
         distList.emplace_back(d, id);
     }
-
     std::sort(distList.begin(), distList.end());
-
     vector<int> result;
-    size_t limit = static_cast<size_t>(
-        std::min(max_neighbours, static_cast<int>(distList.size()))
-    );
-    for (size_t i = 0; i < limit; ++i) {
+    for (size_t i = 0; i < std::min(distList.size(), (size_t)max_neighbours);
+         ++i) {
         result.push_back(distList[i].second);
     }
-
     return result;
 }
 
 vector<int> HnswCPU::selectNeighborsWithHeuristic(
-    const vector<float> &query,
-    const vector<int> candidates,
+    const float *query,
+    const vector<int> &candidates,
     int max_neighbours,
     int layer,
     bool extendCandidates,
     bool keepPrunedConnections
 ) {
-
     vector<int> result;
-
     priority_queue<DistanceIndexPair, vector<DistanceIndexPair>, std::greater<>>
         pq;
     priority_queue<DistanceIndexPair, vector<DistanceIndexPair>, std::greater<>>
         discarded;
-
     vector<uint8_t> visited(nodes.size(), 0);
-
-    size_t queryLen = query.size();
     size_t layerIdx = static_cast<size_t>(layer);
 
     for (int cand : candidates) {
-        size_t candIdx = static_cast<size_t>(cand);
-
-        if (!visited[candIdx]) {
-            visited[candIdx] = 1;
-            double d = distFunc(
-                query.data(), nodes[candIdx].embedding.data(), queryLen
-            );
-            pq.push({d, cand});
+        if (!visited[cand]) {
+            visited[cand] = 1;
+            pq.push({distFunc(query, getEmbedding(cand), dim), cand});
         }
-
         if (extendCandidates) {
-            for (int nei : nodes[candIdx].neighbors[layerIdx]) {
-                size_t neiIdx = static_cast<size_t>(nei);
-                if (!visited[neiIdx]) {
-                    visited[neiIdx] = 1;
-                    double d = distFunc(
-                        query.data(), nodes[neiIdx].embedding.data(), queryLen
-                    );
-                    pq.push({d, nei});
+            for (int nei : nodes[cand].neighbors[layerIdx]) {
+                if (!visited[nei]) {
+                    visited[nei] = 1;
+                    pq.push({distFunc(query, getEmbedding(nei), dim), nei});
                 }
             }
         }
     }
 
-    while (!pq.empty() && static_cast<int>(result.size()) < max_neighbours) {
-
-        auto [dist, id] = pq.top();
+    while (!pq.empty() && (int)result.size() < max_neighbours) {
+        auto [d, id] = pq.top();
         pq.pop();
-
         bool good = true;
-
         for (int r : result) {
-            double d = distFunc(
-                nodes[static_cast<size_t>(id)].embedding.data(),
-                nodes[static_cast<size_t>(r)].embedding.data(),
-                queryLen
-            );
-            if (d < dist) {
+            double dd = distFunc(getEmbedding(id), getEmbedding(r), dim);
+            if (dd < d) {
                 good = false;
                 break;
             }
         }
-
-        if (good) {
+        if (good)
             result.push_back(id);
-        } else {
-            discarded.push({dist, id});
-        }
+        else
+            discarded.push({d, id});
     }
 
     if (keepPrunedConnections) {
-        while (!discarded.empty() &&
-               static_cast<int>(result.size()) < max_neighbours) {
+        while (!discarded.empty() && (int)result.size() < max_neighbours) {
             result.push_back(discarded.top().second);
             discarded.pop();
         }
     }
-
     return result;
 }
 
 void HnswCPU::create(const vector<vector<float>> &data) {
+    if (data.empty())
+        return;
+    dim = data[0].size();
+    embeddings.reserve(data.size() * dim);
+    nodes.reserve(data.size());
     for (const auto &v : data)
         add(v);
 }
 
 void HnswCPU::add(const vector<float> &embedding) {
-
     int nodeLevel = sampleLevel();
     int id = currentId++;
 
-    nodes.emplace_back(id, nodeLevel, embedding);
+    // append embedding contiguously
+    embeddings.insert(embeddings.end(), embedding.begin(), embedding.end());
+    nodes.emplace_back(id, nodeLevel);
 
-    if (currentId == 1) {
+    if (entryPoint == -1) {
         entryPoint = 0;
         maxLevel = nodeLevel;
         return;
     }
 
     int curr = entryPoint;
-
     for (int level = maxLevel; level > nodeLevel; --level) {
-        curr = searchLayer(embedding, curr, 1, level)[0];
+        curr = searchLayer(embedding.data(), curr, 1, level)[0];
     }
 
     for (int level = std::min(nodeLevel, maxLevel); level >= 0; --level) {
-
         int maxNeighbors = (level == 0) ? M0 : M;
-        auto layerNodes = searchLayer(embedding, curr, efConstruction, level);
-
+        auto layerNodes =
+            searchLayer(embedding.data(), curr, efConstruction, level);
         auto selected = selectNeighborsWithHeuristic(
-            embedding, layerNodes, maxNeighbors, level, true, true
+            embedding.data(), layerNodes, maxNeighbors, level, true, true
         );
-
-        size_t ind = static_cast<size_t>(id);
-        size_t lvl = static_cast<size_t>(level);
-
-        nodes[ind].neighbors[lvl] = selected;
+        nodes[id].neighbors[level] = selected;
 
         for (int nid : selected) {
-            size_t nidIdx = static_cast<size_t>(nid);
-
-            if (nodes[nidIdx].level < level)
+            if (nodes[nid].level < level)
                 continue;
-
-            auto &neighList = nodes[nidIdx].neighbors[lvl];
+            auto &neighList = nodes[nid].neighbors[level];
             neighList.push_back(id);
-
-            if (static_cast<int>(neighList.size()) > maxNeighbors) {
+            if ((int)neighList.size() > maxNeighbors) {
                 neighList = selectNeighborsWithHeuristic(
-                    nodes[nidIdx].embedding,
+                    getEmbedding(nid),
                     neighList,
                     maxNeighbors,
                     level,
@@ -284,21 +216,16 @@ void HnswCPU::add(const vector<float> &embedding) {
 }
 
 vector<int> HnswCPU::search(const vector<float> &query, int k, int efSearch) {
-
     if (nodes.empty())
         return {};
-
     int curr = entryPoint;
-
     for (int level = maxLevel; level > 0; --level) {
-        curr = searchLayer(query, curr, 1, level)[0];
+        curr = searchLayer(query.data(), curr, 1, level)[0];
     }
-
-    auto candidates = searchLayer(query, curr, efSearch, 0);
-
-    return selectNeighbors(query, candidates, k);
+    auto candidates = searchLayer(query.data(), curr, efSearch, 0);
+    return selectNeighbors(query.data(), candidates, k);
 }
 
-int HnswCPU::size() const { return static_cast<int>(nodes.size()); }
+int HnswCPU::size() const { return (int)nodes.size(); }
 
 void HnswCPU::printInfo() { printSimdInfo(); }

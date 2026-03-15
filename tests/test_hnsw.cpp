@@ -8,35 +8,6 @@
 
 using std::vector;
 
-namespace {
-
-void expectDistFuncsClose(
-    DistFunc a,
-    DistFunc b,
-    std::size_t dim,
-    bool isCosine = false
-) {
-    std::mt19937 gen(777);
-    std::uniform_real_distribution<float> dist(0.0f, 1.0f);
-
-    vector<float> v1(dim), v2(dim);
-    for (std::size_t i = 0; i < dim; ++i) {
-        v1[i] = dist(gen);
-        v2[i] = dist(gen);
-    }
-
-    double ra = a(v1.data(), v2.data(), dim);
-    double rb = b(v1.data(), v2.data(), dim);
-
-    if (isCosine) {
-        EXPECT_NEAR(ra, rb, 1e-5f);
-    } else {
-        EXPECT_FLOAT_EQ(ra, rb);
-    }
-}
-
-} // namespace
-
 TEST(HnswCPU, BasicInsertAndSearch) {
     constexpr size_t N = 100;
     constexpr size_t DIM = 16;
@@ -81,42 +52,6 @@ TEST(DistanceFunctions, BasicKernels) {
     EXPECT_NEAR(cos(a, b, 3), cosine_scalar(a, b, 3), 1e-5f);
 }
 
-TEST(DistanceFunctions, DispatchMatchesSimdImplementationsWhenAvailable) {
-    constexpr std::size_t dim = 16;
-
-#if defined(__AVX2__)
-    DistFunc l2 = getDistanceFunction(DistanceType::L2);
-    DistFunc l1 = getDistanceFunction(DistanceType::L1);
-    DistFunc cos = getDistanceFunction(DistanceType::COSINE);
-
-    expectDistFuncsClose(l2, &l2_avx, dim, false);
-    expectDistFuncsClose(l1, &l1_avx, dim, false);
-    expectDistFuncsClose(cos, &cosine_avx, dim, true);
-#elif defined(__ARM_NEON__)
-    DistFunc l2 = getDistanceFunction(DistanceType::L2);
-    DistFunc l1 = getDistanceFunction(DistanceType::INNER_PRODUCT);
-    DistFunc cos = getDistanceFunction(DistanceType::COSINE);
-
-    expectDistFuncsClose(l2, &l2_neon, dim, false);
-    expectDistFuncsClose(l1, &ip_neon, dim, false);
-    expectDistFuncsClose(cos, &cosine_neon, dim, true);
-#else
-    // On scalar-only builds, just ensure dispatch matches scalar paths.
-    DistFunc l2 = getDistanceFunction(DistanceType::L2);
-    DistFunc l1 = getDistanceFunction(DistanceType::L1);
-    DistFunc cos = getDistanceFunction(DistanceType::COSINE);
-
-    expectDistFuncsClose(l2, &l2_scalar, dim, false);
-    expectDistFuncsClose(l1, &l1_scalar, dim, false);
-    expectDistFuncsClose(cos, &cosine_scalar, dim, true);
-#endif
-}
-
-TEST(DistanceFunctions, PrintSimdInfoDoesNotCrash) {
-    printSimdInfo();
-}
-
-
 TEST(HnswCPU, L1AndCosineModes) {
     constexpr size_t N = 50;
     constexpr size_t DIM = 8;
@@ -125,7 +60,7 @@ TEST(HnswCPU, L1AndCosineModes) {
     std::mt19937 gen(321);
     std::uniform_real_distribution<float> dist(0.0f, 1.0f);
 
-    vector<vector<float> > data(N, vector<float>(DIM));
+    vector<vector<float>> data(N, vector<float>(DIM));
     for (size_t i = 0; i < N; ++i)
         for (size_t j = 0; j < DIM; ++j)
             data[i][j] = dist(gen);

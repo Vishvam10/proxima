@@ -1,23 +1,22 @@
 #pragma once
 
+#include "dist/dispatch.h"
 #include <cstdint>
-#include <mutex>
 #include <random>
 #include <vector>
 
-#include "dist/dispatch.h"
-
 using std::vector;
-using std::mutex;
 
-class Node {
-  public:
+struct Node {
     int id;
     int level;
-    vector<float> embedding;
     vector<vector<int>> neighbors;
 
-    Node(int id, int level, const vector<float> &embedding);
+    Node(int id_, int level_) :
+        id(id_),
+        level(level_) {
+        neighbors.resize(static_cast<size_t>(level) + 1);
+    }
 };
 
 class HnswIndex {
@@ -38,7 +37,7 @@ class HnswCPU : public HnswIndex {
     double levelMultiplier;
 
     vector<Node> nodes;
-
+    vector<float> embeddings;
     int entryPoint;
     int maxLevel;
     int currentId;
@@ -50,25 +49,25 @@ class HnswCPU : public HnswIndex {
     DistFunc distFunc;
 
     int sampleLevel();
-    double l2Distance(const vector<float> &a, const vector<float> &b) const;
-
-    vector<int>
-    searchLayer(const vector<float> &query, int entry, int ef, int level);
-
+    vector<int> searchLayer(const float *query, int entry, int ef, int level);
     vector<int> selectNeighbors(
-        const vector<float> &query,
+        const float *query,
         const vector<int> &candidates,
         int max_neighbours
     );
-
     vector<int> selectNeighborsWithHeuristic(
-        const vector<float> &query,
-        const vector<int> candidates,
+        const float *query,
+        const vector<int> &candidates,
         int max_neighbours,
         int layer,
         bool extendCandidates,
         bool keepPrunedConnections
     );
+
+    const float *getEmbedding(int id) const {
+        return embeddings.data() + id * dim;
+    }
+    size_t dim;
 
   public:
     HnswCPU(
@@ -84,6 +83,5 @@ class HnswCPU : public HnswIndex {
     vector<int>
     search(const vector<float> &query, int k, int efSearch = 50) override;
     int size() const override;
-
     void printInfo();
 };

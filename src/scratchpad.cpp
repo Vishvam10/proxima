@@ -7,7 +7,7 @@
 using std::cout, std::vector;
 
 int main() {
-    const int N = 100;
+    const int N = 1000;
     const int DIM = 32;
 
     // Generate random data
