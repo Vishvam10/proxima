@@ -1,8 +1,8 @@
+#include "hnsw.h"
+
 #include <iomanip>
 #include <iostream>
 #include <random>
-
-#include "hnsw.h"
 
 using std::cout, std::vector;
 

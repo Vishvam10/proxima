@@ -3,7 +3,7 @@
 #include <cstddef>
 #include <iostream>
 
-inline double ip_scalar(const float* a, const float* b, std::size_t dim) {
+inline double ip_scalar(const float *a, const float *b, std::size_t dim) {
     double sum = 0.0;
     std::cout << "ip_scalar called\n";
 
