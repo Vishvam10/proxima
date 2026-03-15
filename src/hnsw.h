@@ -12,25 +12,27 @@ struct Node {
     int level;
     vector<vector<int>> neighbors;
 
-    Node(int id_, int level_) :
-        id(id_),
-        level(level_) {
+    Node(int id_, int level_)
+        : id(id_), level(level_) {
         neighbors.resize(static_cast<size_t>(level) + 1);
     }
 };
 
 class HnswIndex {
-  public:
+public:
     virtual ~HnswIndex() = default;
-    virtual void create(const vector<vector<float>> &data) = 0;
-    virtual void add(const vector<float> &embedding) = 0;
+
+    virtual void create(const vector<vector<float>>& data) = 0;
+    virtual void add(const vector<float>& embedding) = 0;
+
     virtual vector<int>
-    search(const vector<float> &query, int k, int efSearch = 50) = 0;
+    search(const vector<float>& query, int k, int efSearch = 50) = 0;
+
     virtual int size() const = 0;
 };
 
 class HnswCPU : public HnswIndex {
-  private:
+private:
     int M;
     int M0;
     int efConstruction;
@@ -38,38 +40,52 @@ class HnswCPU : public HnswIndex {
 
     vector<Node> nodes;
     vector<float> embeddings;
+
     int entryPoint;
     int maxLevel;
     int currentId;
+
+    size_t dim;
 
     std::mt19937 gen;
     std::uniform_real_distribution<float> uniform_dist;
 
     DistanceType distType;
-    DistFunc distFunc;
+    bool forceScalar;
 
     int sampleLevel();
-    vector<int> searchLayer(const float *query, int entry, int ef, int level);
+
+    vector<int> searchLayer(
+        const float* query,
+        int entry,
+        int ef,
+        int level
+    );
+
     vector<int> selectNeighbors(
-        const float *query,
-        const vector<int> &candidates,
+        const float* query,
+        const vector<int>& candidates,
         int max_neighbours
     );
+
     vector<int> selectNeighborsWithHeuristic(
-        const float *query,
-        const vector<int> &candidates,
+        const float* query,
+        const vector<int>& candidates,
         int max_neighbours,
         int layer,
         bool extendCandidates,
         bool keepPrunedConnections
     );
 
-    const float *getEmbedding(int id) const {
-        return embeddings.data() + id * dim;
+    inline const float* getEmbedding(int id) const {
+        return &embeddings[id * dim];
     }
-    size_t dim;
 
-  public:
+    inline double distance(const float* a, const float* b) const {
+        return computeDistance(distType, a, b, dim, forceScalar);
+    }
+
+public:
     HnswCPU(
         int M = 16,
         int efConstruction = 200,
@@ -78,10 +94,13 @@ class HnswCPU : public HnswIndex {
         bool forceScalar = false
     );
 
-    void create(const vector<vector<float>> &data) override;
-    void add(const vector<float> &embedding) override;
+    void create(const vector<vector<float>>& data) override;
+    void add(const vector<float>& embedding) override;
+
     vector<int>
-    search(const vector<float> &query, int k, int efSearch = 50) override;
+    search(const vector<float>& query, int k, int efSearch = 50) override;
+
     int size() const override;
+
     void printInfo();
 };

@@ -59,7 +59,7 @@ scratchpad: clean
 	@$(BUILD_DIR)/scratchpad
 
 # ----------------------------
-test: build
+test: clean build
 	@cd $(BUILD_DIR) && ctest --output-on-failure
 
 # ----------------------------

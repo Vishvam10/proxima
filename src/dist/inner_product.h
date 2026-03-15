@@ -1,15 +1,17 @@
 #pragma once
 
 #include <cstddef>
+#include <iostream>
 
-// Inner product distance: 1.0f - dot(a, b)
-// Lower value = more similar (matches hnswlib "ip" space convention).
-inline double ip_scalar(const float *a, const float *b, std::size_t dim) {
-    double dot = 0.0;
+inline double ip_scalar(const float* a, const float* b, std::size_t dim) {
+    double sum = 0.0;
+    std::cout << "ip_scalar called\n";
+
     for (std::size_t i = 0; i < dim; ++i) {
-        dot += static_cast<double>(a[i]) * static_cast<double>(b[i]);
+        sum += static_cast<double>(a[i]) * static_cast<double>(b[i]);
     }
-    return 1.0 - dot;
+
+    return sum;
 }
 
 #if defined(__AVX2__)
@@ -37,7 +39,7 @@ inline double ip_avx(const float *a, const float *b, std::size_t dim) {
         dot += static_cast<double>(a[i]) * static_cast<double>(b[i]);
     }
 
-    return 1.0 - dot;
+    return dot;
 }
 #endif
 
@@ -47,6 +49,7 @@ inline double ip_avx(const float *a, const float *b, std::size_t dim) {
 inline double ip_neon(const float *a, const float *b, std::size_t dim) {
     float32x4_t sum = vdupq_n_f32(0.0f);
     std::size_t i = 0;
+    std::cout << "ip_neon called\n\n";
 
     for (; i + 4 <= dim; i += 4) {
         float32x4_t va = vld1q_f32(a + i);
@@ -63,6 +66,6 @@ inline double ip_neon(const float *a, const float *b, std::size_t dim) {
         dot += static_cast<double>(a[i]) * static_cast<double>(b[i]);
     }
 
-    return 1.0 - dot;
+    return dot;
 }
 #endif
