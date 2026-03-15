@@ -1,8 +1,6 @@
 #pragma once
 #include <cstddef>
-
 enum class DistanceType { L2, INNER_PRODUCT, COSINE };
-
 double computeDistance(
     DistanceType type,
     const float *a,
@@ -10,5 +8,4 @@ double computeDistance(
     std::size_t dim,
     bool forceScalar = false
 );
-
 void printSimdInfo();

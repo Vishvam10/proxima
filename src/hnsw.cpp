@@ -97,10 +97,8 @@ HnswCPU::searchLayer(const float *query, int entry, int ef, int level) {
             double d = distance(query, getEmbedding(nei));
 
             if ((int)topResults.size() < ef || d < topResults.top().first) {
-
                 candidates.push({d, nei});
                 topResults.push({d, nei});
-
                 if ((int)topResults.size() > ef)
                     topResults.pop();
             }
@@ -177,9 +175,7 @@ vector<int> HnswCPU::selectNeighborsWithHeuristic(
         }
 
         if (extendCandidates) {
-
             for (int nei : nodes[cand].neighbors[layerIdx]) {
-
                 if (visited[nei] != visitTag) {
                     visited[nei] = visitTag;
                     pq.push({distance(query, getEmbedding(nei)), nei});
@@ -243,10 +239,8 @@ void HnswCPU::add(const vector<float> &embedding) {
     nodes.emplace_back(id, nodeLevel);
 
     if (entryPoint == -1) {
-
         entryPoint = 0;
         maxLevel = nodeLevel;
-
         return;
     }
 
@@ -258,7 +252,6 @@ void HnswCPU::add(const vector<float> &embedding) {
     for (int level = std::min(nodeLevel, maxLevel); level >= 0; --level) {
 
         int maxNeighbors = (level == 0) ? M0 : M;
-
         auto layerNodes =
             searchLayer(embedding.data(), curr, efConstruction, level);
 
@@ -282,7 +275,6 @@ void HnswCPU::add(const vector<float> &embedding) {
                 continue;
 
             auto &neighList = nodes[nid].neighbors[level];
-
             neighList.push_back(id);
 
             if ((int)neighList.size() > maxNeighbors)
@@ -298,7 +290,6 @@ void HnswCPU::add(const vector<float> &embedding) {
     }
 
     if (nodeLevel > maxLevel) {
-
         entryPoint = id;
         maxLevel = nodeLevel;
     }

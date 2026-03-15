@@ -1,9 +1,7 @@
 #include "dispatch.h"
-
 #include "cosine.h"
 #include "inner_product.h"
 #include "l2.h"
-
 double computeDistance(
     DistanceType type,
     const float *a,
@@ -12,7 +10,6 @@ double computeDistance(
     bool forceScalar
 ) {
     switch (type) {
-
     case DistanceType::L2:
         if (forceScalar)
             return l2_scalar(a, b, dim);
@@ -23,7 +20,6 @@ double computeDistance(
 #else
         return l2_scalar(a, b, dim);
 #endif
-
     case DistanceType::INNER_PRODUCT:
         if (forceScalar)
             return ip_scalar(a, b, dim);
@@ -34,7 +30,6 @@ double computeDistance(
 #else
         return ip_scalar(a, b, dim);
 #endif
-
     case DistanceType::COSINE:
         if (forceScalar)
             return cosine_scalar(a, b, dim);
@@ -46,14 +41,10 @@ double computeDistance(
         return cosine_scalar(a, b, dim);
 #endif
     }
-
     return l2_scalar(a, b, dim);
 }
-
 #include "dispatch.h"
-
 #include <iostream>
-
 void printSimdInfo() {
 #if defined(__ARM_NEON__)
     std::cout << "[SIMD] Compiled with NEON\n";
