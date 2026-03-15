@@ -14,3 +14,6 @@ AlignAfterOpenBracket: BlockIndent
 
 BreakConstructorInitializers: AfterColon
 PackConstructorInitializers: Never
+
+IncludeBlocks: Regroup
+SortIncludes: true
