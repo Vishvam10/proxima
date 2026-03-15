@@ -3,47 +3,51 @@
 #include "inner_product.h"
 #include "l2.h"
 
-#include <iostream>
+double computeDistance(
+    DistanceType type,
+    const float* a,
+    const float* b,
+    std::size_t dim,
+    bool forceScalar
+) {
+    switch (type) {
 
-DistFunc getDistanceFunction(DistanceType type, bool forceScalar) {
-    if (type == DistanceType::L2) {
-        if (forceScalar)
-            return &l2_scalar;
+    case DistanceType::L2:
+        if (forceScalar) return l2_scalar(a,b,dim);
 #if defined(__AVX2__)
-        return &l2_avx;
+        return l2_avx(a,b,dim);
 #elif defined(__ARM_NEON__)
-        return &l2_neon;
+        return l2_neon(a,b,dim);
 #else
-        return &l2_scalar;
+        return l2_scalar(a,b,dim);
+#endif
+
+    case DistanceType::INNER_PRODUCT:
+        if (forceScalar) return ip_scalar(a,b,dim);
+#if defined(__AVX2__)
+        return ip_avx(a,b,dim);
+#elif defined(__ARM_NEON__)
+        return ip_neon(a,b,dim);
+#else
+        return ip_scalar(a,b,dim);
+#endif
+
+    case DistanceType::COSINE:
+        if (forceScalar) return cosine_scalar(a,b,dim);
+#if defined(__AVX2__)
+        return cosine_avx(a,b,dim);
+#elif defined(__ARM_NEON__)
+        return cosine_neon(a,b,dim);
+#else
+        return cosine_scalar(a,b,dim);
 #endif
     }
 
-    if (type == DistanceType::INNER_PRODUCT) {
-        if (forceScalar)
-            return &ip_scalar;
-#if defined(__AVX2__)
-        return &ip_avx;
-#elif defined(__ARM_NEON__)
-        return &ip_neon;
-#else
-        return &ip_scalar;
-#endif
-    }
-
-    if (type == DistanceType::COSINE) {
-        if (forceScalar)
-            return &cosine_scalar;
-#if defined(__AVX2__)
-        return &cosine_avx;
-#elif defined(__ARM_NEON__)
-        return &cosine_neon;
-#else
-        return &cosine_scalar;
-#endif
-    }
-
-    return &l2_scalar;
+    return l2_scalar(a,b,dim);
 }
+
+#include "dispatch.h"
+#include <iostream>
 
 void printSimdInfo() {
 #if defined(__ARM_NEON__)
