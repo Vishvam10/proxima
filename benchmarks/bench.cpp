@@ -62,9 +62,9 @@ void printTableRow(
 ) {
     cout << "| " << left << setw(10) << mode << " | " << setw(6) << N << " | "
          << setw(6) << DIM << " | " << setw(4) << K << " | " << setw(12)
-         << fixed << setprecision(2) << build_s << " | " << setw(12)
-         << query_us << " | " << setw(12) << brute_us << " | " << setw(10)
-         << speedup << " | " << setw(8) << recall << " |\n";
+         << fixed << setprecision(2) << build_s << " | " << setw(12) << query_us
+         << " | " << setw(12) << brute_us << " | " << setw(10) << speedup
+         << " | " << setw(8) << recall << " |\n";
 }
 
 void printTableFooter() {
@@ -77,14 +77,34 @@ int main() {
     cout << "\n\nC++ Benchmarks\n\n";
 
     vector<Scenario> scenarios = {
+        // Small datasets
         {1000, 128, 10},
         {5000, 128, 10},
         {10000, 128, 10},
         {5000, 64, 10},
         {5000, 256, 10},
         {5000, 128, 5},
-        {5000, 128, 50}
+        {5000, 128, 50},
+
+        // Medium datasets
+        {50000, 128, 10},
+        {100000, 128, 10},
+        {100000, 64, 10},
+        {100000, 256, 10},
+        {100000, 128, 50},
+
+        // Large datasets
+        {500000, 128, 10},
+        {1000000, 128, 10},
+        {1000000, 64, 10},
+        {1000000, 256, 10},
+        {1000000, 128, 50},
+
+        // Extra-large datasets
+        {5000000, 128, 10},
+        {10000000, 128, 10}
     };
+
     vector<Mode> modes = {{true, "cpp_scalar"}, {false, "cpp_simd"}};
 
     mt19937 gen(42);
