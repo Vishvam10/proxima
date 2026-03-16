@@ -2,6 +2,7 @@ import sys
 
 import pandas as pd
 import matplotlib
+
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from pathlib import Path
@@ -23,55 +24,45 @@ df = pd.concat([cpp, py], ignore_index=True)
 
 def plot_metric(metric: str, y_label: str, global_title: str):
     Ns = sorted(df.N.unique())
+    rows, cols = 2, 3
 
-    rows = 2
-    cols = 3
-
-    fig, axs = plt.subplots(rows, cols, figsize=(20, 10))
+    fig, axs = plt.subplots(rows, cols, figsize=(20, 12)) 
     axs = axs.flatten()
 
-    lines = []
-    labels = []
+    lines, labels = [], []
 
     for i, N in enumerate(Ns):
         ax = axs[i]
-
         dfN = df[df.N == N]
-
         for impl in dfN.impl.unique():
             sub = dfN[dfN.impl == impl]
-
             for K in sorted(sub.K.unique()):
                 dfK = sub[sub.K == K].sort_values("DIM")
-
                 label = f"{impl} (K={K})"
-                line, = ax.plot(dfK["DIM"], dfK[metric], marker="o", label=label)
-
+                (line,) = ax.plot(dfK["DIM"], dfK[metric], marker="o", label=label)
                 if label not in labels:
                     lines.append(line)
                     labels.append(label)
 
-        ax.set_title(f"N = {N}")
+        ax.set_title(f"N = {N}", pad=15)
         ax.set_xlabel("DIM", labelpad=10)
         ax.set_ylabel(y_label, labelpad=10)
-        ax.grid(True)
+        ax.grid(True, alpha=0.3)
 
-    fig.subplots_adjust(wspace=0.30, hspace=0.35, top=0.85)
-
-    fig.suptitle(global_title, fontsize=16)
-
+    fig.suptitle(global_title, fontsize=24, y=0.94, fontweight='bold')
     fig.legend(
         handles=lines,
         labels=labels,
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.97),
+        bbox_to_anchor=(0.5, 0.89),
         ncol=4,
-        frameon=False
+        frameon=False,
+        fontsize=12
     )
+    plt.tight_layout(rect=[0.02, 0.02, 0.98, 0.83])
 
     plt.savefig(OUT / f"{metric}.png", dpi=300, bbox_inches="tight")
     plt.close(fig)
-
     print(f"Saved plot: {OUT / f'{metric}.png'}")
 
 def main():
