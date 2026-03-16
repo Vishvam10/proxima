@@ -1,20 +1,22 @@
+import sys
+
 import pandas as pd
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from pathlib import Path
 
-import matplotlib as mpl
 import catppuccin
 
-# Use Catppuccin Macchiato style
-mpl.style.use(catppuccin.PALETTE.macchiato.identifier)
+matplotlib.style.use(catppuccin.PALETTE.macchiato.identifier)
 
-# Paths
 BASE = Path(__file__).parent
-DATA = BASE / "results"
-OUT = BASE / "plots"
-OUT.mkdir(exist_ok=True)
 
-# Read CSVs
+run_dir = sys.argv[1] if len(sys.argv) > 1 else "."
+DATA = BASE / "results" / run_dir
+OUT = DATA / "plots"
+OUT.mkdir(exist_ok=True, parents=True)
+
 cpp = pd.read_csv(DATA / "cpp_results.csv")
 py = pd.read_csv(DATA / "python_results.csv")
 df = pd.concat([cpp, py], ignore_index=True)
@@ -72,10 +74,9 @@ def plot_metric(metric: str, y_label: str, global_title: str):
         frameon=False
     )
 
-    # Save figure
     plt.savefig(OUT / f"{metric}.png", dpi=300, bbox_inches="tight")
+    plt.close(fig)
     print(f"Saved plot: {OUT / f'{metric}.png'}")
-    plt.show()
 
 
 def main():

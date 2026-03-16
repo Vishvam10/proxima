@@ -17,10 +17,10 @@ COMPILE_DB := $(BUILD_DIR)
 # Detect CPU cores for parallel jobs
 NPROC := $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
 
-SRC := $(shell find src -name "*.cpp")
+SRC := $(shell find src -name "*.cpp" ! -name "scratchpad.cpp")
 CPP_FILES := $(shell find src -name "*.cpp" -o -name "*.hpp" -o -name "*.h")
 
-.PHONY: all setup dev build rebuild clean test scratchpad cppbench pybench bench plot format format-check lint lint-fix help
+.PHONY: all setup dev build rebuild clean test scratchpad venv cppbench pybench bench plot format format-check lint lint-fix help
 
 # ----------------------------
 all: build
@@ -55,7 +55,7 @@ scratchpad: clean
 	-fsanitize=address,undefined \
 	-fsanitize-address-use-after-scope \
 	-fno-omit-frame-pointer \
-	-Isrc $(SRC) -o $(BUILD_DIR)/scratchpad
+	-Isrc $(SRC) src/scratchpad.cpp -o $(BUILD_DIR)/scratchpad
 	@$(BUILD_DIR)/scratchpad
 
 # ----------------------------
@@ -63,14 +63,9 @@ test: clean build
 	@cd $(BUILD_DIR) && ctest --output-on-failure
 
 # ----------------------------
-cppbench: build
-	@mkdir -p benchmarks/results
-	@./$(BUILD_DIR)/bench
-
-pybench:
-	@mkdir -p benchmarks/results
-	@echo "Setting up Python virtual environment..."
+venv:
 	@if [ ! -d "$(VENV_DIR)" ]; then \
+	    echo "Setting up Python virtual environment..."; \
 	    $(PYTHON) -m venv $(VENV_DIR); \
 	    echo "Installing benchmark dependencies..."; \
 	    $(VENV_PYTHON) -m pip install --upgrade pip; \
@@ -78,25 +73,39 @@ pybench:
 	else \
 	    echo "Virtual environment already exists."; \
 	fi
-	@echo "Running benchmark..."
-	@$(VENV_PYTHON) $(BENCH_DIR)/bench.py
+
+cppbench: build
+	@mkdir -p $(BENCH_DIR)/results/$(RUN_DIR)
+	@./$(BUILD_DIR)/bench $(BENCH_DIR)/results/$(RUN_DIR)
+
+pybench: venv
+	@mkdir -p $(BENCH_DIR)/results/$(RUN_DIR)
+	@$(VENV_PYTHON) $(BENCH_DIR)/bench.py $(RUN_DIR)
 
 # ----------------------------
-bench: cppbench pybench
-	@RESULTS_DIR=$$(date +"%d-%m-%Y-%H-%M-%S"); \
-	echo "Comparing results in $$RESULTS_DIR..."; \
-	$(VENV_PYTHON) $(BENCH_DIR)/compare.py $$RESULTS_DIR; \
-	echo "Generating plots in $$RESULTS_DIR..."; \
-	$(VENV_PYTHON) $(BENCH_DIR)/plot.py $$RESULTS_DIR
+bench: build venv
+	@RUN_DIR=$$(date +"%d-%m-%Y-%H-%M"); \
+	mkdir -p $(BENCH_DIR)/results/$$RUN_DIR/plots; \
+	echo "Results directory: $$RUN_DIR"; \
+	echo "Running C++ benchmarks..."; \
+	./$(BUILD_DIR)/bench $(BENCH_DIR)/results/$$RUN_DIR; \
+	echo "Running Python benchmarks..."; \
+	$(VENV_PYTHON) $(BENCH_DIR)/bench.py $$RUN_DIR; \
+	echo "Comparing results..."; \
+	$(VENV_PYTHON) $(BENCH_DIR)/compare.py $$RUN_DIR; \
+	echo "Generating plots..."; \
+	$(VENV_PYTHON) $(BENCH_DIR)/plot.py $$RUN_DIR; \
+	echo "Done. Results saved to $(BENCH_DIR)/results/$$RUN_DIR/"
 
 # ----------------------------
-plot: $(VENV_PYTHON)
-	@LATEST=$$(ls -t $(BENCH_DIR)/results/ | head -1) && \
+plot: venv
+	@LATEST=$$(ls -dt $(BENCH_DIR)/results/*/ 2>/dev/null | head -1) && \
 	if [ -z "$$LATEST" ]; then \
 		echo "No results found. Run 'make bench' first."; \
 		exit 1; \
 	fi && \
-	$(VENV_PYTHON) $(BENCH_DIR)/plot.py $$LATEST
+	RUN_DIR=$$(basename $$LATEST) && \
+	$(VENV_PYTHON) $(BENCH_DIR)/plot.py $$RUN_DIR
 
 # ----------------------------
 format:
@@ -110,11 +119,11 @@ format-check:
 # ----------------------------
 lint: build
 	@echo "Running clang-tidy (parallel)..."
-	@printf "%s\n" $(SRC) | xargs -P $(NPROC) -I{} $(CLANG_TIDY) {} -p $(COMPILE_DB)
+	@printf "%s\n" $(SRC) | xargs -P $(NPROC) -I{} $(CLANG_TIDY) -p $(COMPILE_DB) {}
 
 lint-fix: build
 	@echo "Running clang-tidy with fixes..."
-	@printf "%s\n" $(SRC) | xargs -P $(NPROC) -I{} $(CLANG_TIDY) {} -p $(COMPILE_DB) -fix
+	@printf "%s\n" $(SRC) | xargs -P $(NPROC) -I{} $(CLANG_TIDY) -p $(COMPILE_DB) --fix {}
 
 # ----------------------------
 clean:
