@@ -1,9 +1,12 @@
-import csv, time
-import hnswlib, numpy as np
+import csv
+import time
+import hnswlib
+import numpy as np
 from pathlib import Path
 
 OUT = Path("results")
 OUT.mkdir(exist_ok=True)
+csv_path = OUT / "python_results.csv"
 
 SCENARIOS = [
     (1000, 128, 10),
@@ -47,7 +50,6 @@ def print_table(data):
 
 
 def main():
-    csv_path = OUT / "python_results.csv"
     data_for_table = []
 
     print("\n\nPython Benchmarks\n\n")

@@ -6,8 +6,8 @@ BASE = Path(__file__).parent
 CPP = BASE / "results/cpp_results.csv"
 PY = BASE / "results/python_results.csv"
 
-OUT = BASE / "results/analysis"
-OUT.mkdir(exist_ok=True)
+OUT = BASE / "results"
+OUT.mkdir(exist_ok=True, parents=True)
 
 
 def load():
