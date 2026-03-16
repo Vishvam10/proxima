@@ -1,4 +1,5 @@
 #include "hnsw.h"
+
 #include <iomanip>
 #include <iostream>
 #include <random>

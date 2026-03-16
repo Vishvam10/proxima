@@ -1,4 +1,5 @@
 #include "dispatch.h"
+
 #include "cosine.h"
 #include "inner_product.h"
 #include "l2.h"
@@ -44,6 +45,7 @@ double computeDistance(
     return l2_scalar(a, b, dim);
 }
 #include "dispatch.h"
+
 #include <iostream>
 void printSimdInfo() {
 #if defined(__ARM_NEON__)
