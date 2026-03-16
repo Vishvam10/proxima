@@ -9,15 +9,12 @@
 using std::vector;
 
 struct Node {
-    int id;
     int level;
-    vector<vector<int>> neighbors;
+    int neighbor_offset;
 
-    Node(int id_, int level_) :
-        id(id_),
-        level(level_) {
-        neighbors.resize(static_cast<size_t>(level_) + 1);
-    }
+    Node(int lvl = 0, int offset = 0) :
+        level(lvl),
+        neighbor_offset(offset) {}
 };
 
 class HnswIndex {
@@ -38,9 +35,11 @@ class HnswCPU : public HnswIndex {
     int M;
     int M0;
     int efConstruction;
+
     double levelMultiplier;
 
     vector<Node> nodes;
+    vector<int> neighbors;
     vector<float> embeddings;
 
     int entryPoint;
@@ -62,8 +61,12 @@ class HnswCPU : public HnswIndex {
     int sampleLevel();
 
     const float *getEmbedding(int id) const {
-        return &embeddings[static_cast<size_t>(id) * dim];
+        return &embeddings[(size_t)id * dim];
     }
+
+    int *getNeighborPtr(int id, int level);
+    const int *getNeighborPtr(int id, int level) const;
+    int getNeighborCount(int level) const;
 
     vector<int> searchLayer(const float *query, int entry, int ef, int level);
 
@@ -77,9 +80,7 @@ class HnswCPU : public HnswIndex {
         const float *query,
         const vector<int> &candidates,
         int max_neighbors,
-        int layer,
-        bool extendCandidates,
-        bool keepPrunedConnections
+        int layer
     );
 
   public:
@@ -99,6 +100,5 @@ class HnswCPU : public HnswIndex {
     search(const vector<float> &query, int k, int efSearch = 50) override;
 
     int size() const override;
-
     void printInfo();
 };
