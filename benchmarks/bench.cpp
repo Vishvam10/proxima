@@ -31,9 +31,9 @@ vector<int> bruteForceKNN(
         float d = 0;
         for (size_t j = 0; j < query.size(); ++j)
             d += (data[i][j] - query[j]) * (data[i][j] - query[j]);
-        dists[i] = {d, (int)i};
+        dists[i] = {d, static_cast<int>(i)};
     }
-    partial_sort(dists.begin(), dists.begin() + k, dists.end());
+    partial_sort(dists.begin(), dists.begin() + static_cast<ptrdiff_t>(k), dists.end());
     vector<int> result(k);
     for (size_t i = 0; i < k; ++i)
         result[i] = dists[i].second;
@@ -77,7 +77,11 @@ void printTableFooter() {
             "--+--------------+------------+----------+\n";
 }
 
-int main() {
+int main(int argc, char *argv[]) {
+
+    string outDir = "benchmarks/results";
+    if (argc > 1)
+        outDir = argv[1];
 
     cout << "\n\nC++ Benchmarks\n\n";
 
@@ -152,7 +156,7 @@ int main() {
     mt19937 gen(42);
 
     // CSV output
-    ofstream csv("benchmarks/results/cpp_results.csv");
+    ofstream csv(outDir + "/cpp_results.csv");
     csv << "impl,N,DIM,K,build_s,query_us,brute_us,speedup,recall\n";
 
     printTableHeader();
@@ -174,21 +178,21 @@ int main() {
             double build_s = duration_cast<microseconds>(t2 - t1).count() / 1e6;
 
             // HNSW query
-            size_t qcount = min((size_t)100, s.N);
+            size_t qcount = min(size_t{100}, s.N);
             size_t correct = 0;
             auto t3 = high_resolution_clock::now();
             for (size_t i = 0; i < qcount; i++) {
-                auto r = index.search(data[i], s.K, 200);
+                auto r = index.search(data[i], static_cast<int>(s.K), 200);
                 for (auto id : r)
-                    if (id == (int)i) {
+                    if (id == static_cast<int>(i)) {
                         correct++;
                         break;
                     }
             }
             auto t4 = high_resolution_clock::now();
             double query_us =
-                duration_cast<microseconds>(t4 - t3).count() / (double)qcount;
-            double recall = (double)correct / qcount;
+                duration_cast<microseconds>(t4 - t3).count() / static_cast<double>(qcount);
+            double recall = static_cast<double>(correct) / static_cast<double>(qcount);
 
             // Brute-force query
             auto t5 = high_resolution_clock::now();
@@ -196,15 +200,15 @@ int main() {
                 bruteForceKNN(data, data[i], s.K);
             auto t6 = high_resolution_clock::now();
             double brute_us =
-                duration_cast<microseconds>(t6 - t5).count() / (double)qcount;
+                duration_cast<microseconds>(t6 - t5).count() / static_cast<double>(qcount);
 
             double speedup = brute_us / query_us;
 
             printTableRow(
                 mode.name,
-                s.N,
-                s.DIM,
-                s.K,
+                static_cast<int>(s.N),
+                static_cast<int>(s.DIM),
+                static_cast<int>(s.K),
                 build_s,
                 query_us,
                 brute_us,
@@ -218,6 +222,6 @@ int main() {
     }
 
     printTableFooter();
-    cout << "\nSaved results/cpp_results.csv\n";
+    cout << "\nSaved " << outDir << "/cpp_results.csv\n";
     return 0;
 }

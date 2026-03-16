@@ -1,11 +1,15 @@
 import csv
+import sys
 import time
 import hnswlib
 import numpy as np
 from pathlib import Path
 
-OUT = Path("benchmarks/results")
-OUT.mkdir(exist_ok=True)
+BASE = Path(__file__).parent
+
+run_dir = sys.argv[1] if len(sys.argv) > 1 else "."
+OUT = BASE / "results" / run_dir
+OUT.mkdir(exist_ok=True, parents=True)
 csv_path = OUT / "python_results.csv"
 
 SCENARIOS = [
