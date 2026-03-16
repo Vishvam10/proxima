@@ -4,7 +4,7 @@ import hnswlib
 import numpy as np
 from pathlib import Path
 
-OUT = Path("results")
+OUT = Path("benchmarks/results")
 OUT.mkdir(exist_ok=True)
 csv_path = OUT / "python_results.csv"
 
@@ -30,7 +30,7 @@ def print_table(data):
         "+------------+--------+--------+------+--------------+--------------+--------------+------------+----------+"
     )
     print(
-        "| Mode       | N      | Dim    | K    | Build(us)    | Query(us)    | Brute(us)    | Speedup    | Recall   |"
+        "| Mode       | N      | Dim    | K    | Build(s)    | Query(us)    | Brute(us)    | Speedup    | Recall   |"
     )
     print(
         "+------------+--------+--------+------+--------------+--------------+--------------+------------+----------+"
