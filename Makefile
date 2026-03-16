@@ -34,7 +34,7 @@ setup:
 dev: format lint test
 
 # ----------------------------
-build:
+build: clean
 	@if [ ! -d "$(BUILD_DIR)" ]; then \
 		echo "Configuring project..."; \
 		mkdir -p $(BUILD_DIR); \
@@ -74,11 +74,11 @@ venv:
 	    echo "Virtual environment already exists."; \
 	fi
 
-cppbench: build
+cppbench: clean build
 	@mkdir -p $(BENCH_DIR)/results/$(RUN_DIR)
 	@./$(BUILD_DIR)/bench $(BENCH_DIR)/results/$(RUN_DIR)
 
-pybench: venv
+pybench: clean venv
 	@mkdir -p $(BENCH_DIR)/results/$(RUN_DIR)
 	@$(VENV_PYTHON) $(BENCH_DIR)/bench.py $(RUN_DIR)
 
