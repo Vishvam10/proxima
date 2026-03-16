@@ -10,31 +10,27 @@ csv_path = OUT / "python_results.csv"
 
 SCENARIOS = [
     # Small datasets
-    (1000, 128, 10),
-    (5000, 128, 10),
-    (10000, 128, 10),
-    (5000, 64, 10),
-    (5000, 256, 10),
-    (5000, 128, 5),
-    (5000, 128, 50),
-
+    (1000, 64, 5), (1000, 64, 10), (1000, 64, 50),
+    (1000, 128, 5), (1000, 128, 10), (1000, 128, 50),
+    (1000, 256, 5), (1000, 256, 10), (1000, 256, 50),
     # Medium datasets
-    (50000, 128, 10),
-    (100000, 128, 10),
-    (100000, 64, 10),
-    (100000, 256, 10),
-    (100000, 128, 50),
-
+    (5000, 64, 5), (5000, 64, 10), (5000, 64, 50),
+    (5000, 128, 5), (5000, 128, 10), (5000, 128, 50),
+    (5000, 256, 5), (5000, 256, 10), (5000, 256, 50),
+    (10000, 64, 5), (10000, 64, 10), (10000, 64, 50),
+    (10000, 128, 5), (10000, 128, 10), (10000, 128, 50),
+    (10000, 256, 5), (10000, 256, 10), (10000, 256, 50),
     # Large datasets
-    (500000, 128, 10),
-    (1000000, 128, 10),
-    (1000000, 64, 10),
-    (1000000, 256, 10),
-    (1000000, 128, 50),
-
+    (50000, 64, 5), (50000, 64, 10), (50000, 64, 50),
+    (50000, 128, 5), (50000, 128, 10), (50000, 128, 50),
+    (50000, 256, 5), (50000, 256, 10), (50000, 256, 50),
+    (100000, 64, 5), (100000, 64, 10), (100000, 64, 50),
+    (100000, 128, 5), (100000, 128, 10), (100000, 128, 50),
+    (100000, 256, 5), (100000, 256, 10), (100000, 256, 50),
     # Extra-large datasets
-    (5000000, 128, 10),
-    (10000000, 128, 10)
+    (500000, 128, 5), (500000, 128, 10), (500000, 128, 50),
+    (1000000, 128, 5), (1000000, 128, 10), (1000000, 128, 50),
+    (5000000, 128, 5), (10000000, 128, 10), (10000000, 128, 50)
 ]
 
 
@@ -43,8 +39,7 @@ def brute_force_knn(data, query, k):
     return np.argsort(dists)[:k]
 
 
-def print_table(data):
-    # Header
+def print_table_header():
     print(
         "+------------+--------+--------+------+--------------+--------------+--------------+------------+----------+"
     )
@@ -55,38 +50,32 @@ def print_table(data):
         "+------------+--------+--------+------+--------------+--------------+--------------+------------+----------+"
     )
 
-    # Rows
-    for row in data:
-        mode, N, DIM, K, build_s, query_us, brute_us, speedup, recall = row
-        print(
-            f"| {mode:<10} | {N:<6} | {DIM:<6} | {K:<4} | {build_s:<12.2f} | {query_us:<12.2f} | {brute_us:<12.2f} | {speedup:<10.2f} | {recall:<8.2f} |"
-        )
 
-    # Footer
+def print_table_footer():
     print(
         "+------------+--------+--------+------+--------------+--------------+--------------+------------+----------+"
     )
 
 
-def main():
-    data_for_table = []
+def print_table_row(mode, N, DIM, K, build_s, query_us, brute_us, speedup, recall):
+    # Format speedup with x inside column
+    speedup_str = f"{speedup:.2f}x"
+    print(
+        f"| {mode:<10} | {N:<6} | {DIM:<6} | {K:<4} | "
+        f"{build_s:<12.2f} | {query_us:<12.2f} | {brute_us:<12.2f} | "
+        f"{speedup_str:<10} | {recall:<8.2f} |",
+        flush=True
+    )
 
-    print("\n\nPython Benchmarks\n\n")
+
+def main():
+    print("\n\nPython Benchmarks\n\n", flush=True)
+    print_table_header()
 
     with open(csv_path, "w", newline="") as f:
         writer = csv.writer(f)
         writer.writerow(
-            [
-                "impl",
-                "N",
-                "DIM",
-                "K",
-                "build_s",
-                "query_us",
-                "brute_us",
-                "speedup",
-                "recall",
-            ]
+            ["impl", "N", "DIM", "K", "build_s", "query_us", "brute_us", "speedup", "recall"]
         )
 
         for N, DIM, K in SCENARIOS:
@@ -120,15 +109,14 @@ def main():
             speedup = brute_us / query_us
             recall = np.mean([i in labels[i] for i in range(len(q))])
 
-            writer.writerow(
-                ["python", N, DIM, K, build_s, query_us, brute_us, speedup, recall]
-            )
-            data_for_table.append(
-                ("python", N, DIM, K, build_s, query_us, brute_us, speedup, recall)
-            )
+            # CSV
+            writer.writerow(["python", N, DIM, K, build_s, query_us, brute_us, speedup, recall])
 
-    print_table(data_for_table)
-    print(f"\nSaved {csv_path}")
+            # Print row live
+            print_table_row("python", N, DIM, K, build_s, query_us, brute_us, speedup, recall)
+
+    print_table_footer()
+    print(f"\nSaved {csv_path}", flush=True)
 
 
 if __name__ == "__main__":
