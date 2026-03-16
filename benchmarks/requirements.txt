@@ -1,4 +1,5 @@
-numpy
-hnswlib
-matplotlib
-
+hnswlib==0.8.0
+matplotlib==3.10.8
+numpy==2.4.3
+pandas==3.0.1
+catppuccin==2.5.0

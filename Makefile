@@ -66,21 +66,25 @@ test: clean build
 cppbench: build
 	@./$(BUILD_DIR)/bench
 
-# ----------------------------
-$(VENV_PYTHON): $(BENCH_DIR)/requirements.txt
-	@echo "Creating Python virtual environment..."
-	@$(PYTHON) -m venv $(VENV_DIR)
-	@echo "Installing benchmark dependencies..."
-	@$(VENV_PYTHON) -m pip install --upgrade pip
-	@$(VENV_PYTHON) -m pip install -r $(BENCH_DIR)/requirements.txt
-
-pybench: $(VENV_PYTHON)
+pybench:
+	@echo "Setting up Python virtual environment..."
+	@if [ ! -d "$(VENV_DIR)" ]; then \
+	    $(PYTHON) -m venv $(VENV_DIR); \
+	    echo "Installing benchmark dependencies..."; \
+	    $(VENV_PYTHON) -m pip install --upgrade pip; \
+	    $(VENV_PYTHON) -m pip install -r $(BENCH_DIR)/requirements.txt; \
+	else \
+	    echo "Virtual environment already exists."; \
+	fi
+	@echo "Running benchmark..."
 	@$(VENV_PYTHON) $(BENCH_DIR)/bench.py
 
 # ----------------------------
 bench: cppbench pybench
-	@RESULTS_DIR=$$(date +"%d-%m-%Y-%H-%M-%S") && \
-	$(VENV_PYTHON) $(BENCH_DIR)/compare.py $$RESULTS_DIR && \
+	@RESULTS_DIR=$$(date +"%d-%m-%Y-%H-%M-%S"); \
+	echo "Comparing results in $$RESULTS_DIR..."; \
+	$(VENV_PYTHON) $(BENCH_DIR)/compare.py $$RESULTS_DIR; \
+	echo "Generating plots in $$RESULTS_DIR..."; \
 	$(VENV_PYTHON) $(BENCH_DIR)/plot.py $$RESULTS_DIR
 
 # ----------------------------

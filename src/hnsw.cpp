@@ -18,7 +18,8 @@ HnswCPU::HnswCPU(
     int M_,
     int efConstruction_,
     uint32_t seed,
-    DistanceType distType_
+    DistanceType distType_,
+    bool forceScalar
 ) :
     M(M_),
     M0(2 * M_),
@@ -30,10 +31,12 @@ HnswCPU::HnswCPU(
     gen(seed),
     uniform_dist(0.0f, 1.0f),
     distType(distType_),
+    forceScalar(false),
     dim(0),
     visitTag(1) {}
 
 inline double HnswCPU::distance(const float *a, const float *b) const {
+    if(forceScalar) return l2_scalar(a, b, dim); 
 
     switch (distType) {
 
