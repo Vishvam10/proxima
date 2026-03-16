@@ -1,200 +1,161 @@
+#include "hnsw.h"
+
 #include <algorithm>
 #include <chrono>
 #include <fstream>
 #include <iomanip>
 #include <iostream>
 #include <random>
-#include <utility>
 #include <vector>
 
-#include "hnsw.h"
-
-using std::cout;
-using std::vector;
-
-using std::chrono::duration_cast;
-using std::chrono::high_resolution_clock;
-using std::chrono::microseconds;
+using namespace std;
+using namespace std::chrono;
 
 struct Scenario {
-    size_t N;
-    size_t DIM;
-    size_t K;
+    size_t N, DIM, K;
 };
-
 struct Mode {
     bool forceScalar;
-    const char* name;
+    const char *name;
 };
 
+// Brute-force KNN
 vector<int> bruteForceKNN(
-    const vector<vector<float>>& data,
-    const vector<float>& query,
+    const vector<vector<float>> &data,
+    const vector<float> &query,
     size_t k
 ) {
-
-    vector<std::pair<float,int>> dists(data.size());
-
+    vector<pair<float, int>> dists(data.size());
     for (size_t i = 0; i < data.size(); ++i) {
-
         float d = 0;
-
-        for (size_t j = 0; j < query.size(); ++j) {
-
-            float diff = data[i][j] - query[j];
-            d += diff * diff;
-        }
-
-        dists[i] = {d, static_cast<int>(i)};
+        for (size_t j = 0; j < query.size(); ++j)
+            d += (data[i][j] - query[j]) * (data[i][j] - query[j]);
+        dists[i] = {d, (int)i};
     }
-
-    std::partial_sort(
-        dists.begin(),
-        dists.begin() + static_cast<ptrdiff_t>(k),
-        dists.end()
-    );
-
+    partial_sort(dists.begin(), dists.begin() + k, dists.end());
     vector<int> result(k);
-
     for (size_t i = 0; i < k; ++i)
         result[i] = dists[i].second;
-
     return result;
+}
+
+// Table helpers
+void printTableHeader() {
+    cout << "+------------+--------+--------+------+--------------+------------"
+            "--+--------------+------------+----------+\n";
+    cout << "| Mode       | N      | Dim    | K    | Build(us)    | Query(us)  "
+            "  | Brute(us)    | Speedup    | Recall   |\n";
+    cout << "+------------+--------+--------+------+--------------+------------"
+            "--+--------------+------------+----------+\n";
+}
+
+void printTableRow(
+    const string &mode,
+    int N,
+    int DIM,
+    int K,
+    double build_s,
+    double query_us,
+    double brute_us,
+    double speedup,
+    double recall
+) {
+    cout << "| " << left << setw(10) << mode << " | " << setw(6) << N << " | "
+         << setw(6) << DIM << " | " << setw(4) << K << " | " << setw(12)
+         << fixed << setprecision(2) << build_s << " | " << setw(12)
+         << query_us << " | " << setw(12) << brute_us << " | " << setw(10)
+         << speedup << " | " << setw(8) << recall << " |\n";
+}
+
+void printTableFooter() {
+    cout << "+------------+--------+--------+------+--------------+------------"
+            "--+--------------+------------+----------+\n";
 }
 
 int main() {
 
+    cout << "\n\nC++ Benchmarks\n\n";
+
     vector<Scenario> scenarios = {
         {1000, 128, 10},
+        {5000, 128, 10},
+        {10000, 128, 10},
         {5000, 64, 10},
-        {10000, 32, 5},
-        {50000, 64, 10},
-        {100000, 32, 10}
+        {5000, 256, 10},
+        {5000, 128, 5},
+        {5000, 128, 50}
     };
+    vector<Mode> modes = {{true, "cpp_scalar"}, {false, "cpp_simd"}};
 
-    vector<Mode> modes = {
-        {true,  "scalar"},
-        {false, "simd"}
-    };
+    mt19937 gen(42);
 
-    cout << "\nC++ Benchmarks\n\n";
+    // CSV output
+    ofstream csv("results/cpp_results.csv");
+    csv << "impl,N,DIM,K,build_s,query_us,brute_us,speedup,recall\n";
 
-    cout << std::fixed << std::setprecision(4);
-
-    cout << std::left
-         << std::setw(10) << "Mode"
-         << std::setw(10) << "Dataset"
-         << std::setw(6)  << "Dim"
-         << std::setw(4)  << "K"
-         << std::setw(12) << "Build(s)"
-         << std::setw(12) << "Query(us)"
-         << std::setw(12) << "Brute(us)"
-         << std::setw(10) << "Speedup"
-         << std::setw(8)  << "Recall"
-         << "\n";
-
-    cout << std::string(84, '-') << "\n";
-
-    std::ofstream csv("benchmarks/cpp_results.csv");
-
-    csv << "mode,dataset,dim,k,build_s,query_us,brute_query_us,speedup,recall\n";
-
-    std::mt19937 gen(42);
+    printTableHeader();
 
     for (auto mode : modes) {
-
         for (auto s : scenarios) {
-
-            std::uniform_real_distribution<float> dist(0.0f, 1.0f);
-
+            // Generate data
+            uniform_real_distribution<float> dist(0.0, 1.0);
             vector<vector<float>> data(s.N, vector<float>(s.DIM));
-
-            for (size_t i = 0; i < s.N; ++i)
-                for (size_t j = 0; j < s.DIM; ++j)
+            for (size_t i = 0; i < s.N; i++)
+                for (size_t j = 0; j < s.DIM; j++)
                     data[i][j] = dist(gen);
 
-            HnswCPU index(
-                16,
-                200,
-                42,
-                DistanceType::L2
-            );
-
+            // Build HNSW
+            HnswCPU index(16, 200, 42, DistanceType::L2, mode.forceScalar);
             auto t1 = high_resolution_clock::now();
-
             index.create(data);
-
             auto t2 = high_resolution_clock::now();
+            double build_s = duration_cast<microseconds>(t2 - t1).count() / 1e6;
 
-            double build_time =
-                duration_cast<microseconds>(t2 - t1).count() / 1e6;
-
-            size_t total_correct = 0;
-
-            size_t query_count =
-                std::min(size_t(100), s.N);
-
+            // HNSW query
+            size_t qcount = min((size_t)100, s.N);
+            size_t correct = 0;
             auto t3 = high_resolution_clock::now();
-
-            for (size_t i = 0; i < query_count; ++i) {
-
-                auto result =
-                    index.search(data[i], s.K, 200);
-
-                for (size_t id : result)
-                    if (id == i) {
-                        ++total_correct;
+            for (size_t i = 0; i < qcount; i++) {
+                auto r = index.search(data[i], s.K, 200);
+                for (auto id : r)
+                    if (id == (int)i) {
+                        correct++;
                         break;
                     }
             }
-
             auto t4 = high_resolution_clock::now();
+            double query_us =
+                duration_cast<microseconds>(t4 - t3).count() / (double)qcount;
+            double recall = (double)correct / qcount;
 
-            double query_time =
-                duration_cast<microseconds>(t4 - t3).count()
-                / double(query_count);
-
-            double recall =
-                static_cast<double>(total_correct)
-                / query_count;
-
+            // Brute-force query
             auto t5 = high_resolution_clock::now();
-
-            for (size_t i = 0; i < query_count; ++i)
+            for (size_t i = 0; i < qcount; i++)
                 bruteForceKNN(data, data[i], s.K);
-
             auto t6 = high_resolution_clock::now();
+            double brute_us =
+                duration_cast<microseconds>(t6 - t5).count() / (double)qcount;
 
-            double brute_query_time =
-                duration_cast<microseconds>(t6 - t5).count()
-                / double(query_count);
+            double speedup = brute_us / query_us;
 
-            double speedup =
-                brute_query_time / query_time;
-
-            cout << std::left
-                 << std::setw(10) << mode.name
-                 << std::setw(10) << s.N
-                 << std::setw(6)  << s.DIM
-                 << std::setw(4)  << s.K
-                 << std::setw(12) << build_time
-                 << std::setw(12) << query_time
-                 << std::setw(12) << brute_query_time
-                 << std::setw(10) << speedup
-                 << std::setw(8)  << recall
-                 << "\n";
-
-            csv << mode.name << ","
-                << s.N << ","
-                << s.DIM << ","
-                << s.K << ","
-                << build_time << ","
-                << query_time << ","
-                << brute_query_time << ","
-                << speedup << ","
-                << recall << "\n";
+            printTableRow(
+                mode.name,
+                s.N,
+                s.DIM,
+                s.K,
+                build_s,
+                query_us,
+                brute_us,
+                speedup,
+                recall
+            );
+            csv << mode.name << "," << s.N << "," << s.DIM << "," << s.K << ","
+                << build_s << "," << query_us << "," << brute_us << ","
+                << speedup << "," << recall << "\n";
         }
     }
 
-    cout << "\nResults saved to benchmarks/cpp_results.csv\n\n";
+    printTableFooter();
+    cout << "\nSaved results/cpp_results.csv\n";
+    return 0;
 }

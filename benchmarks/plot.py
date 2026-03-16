@@ -1,99 +1,59 @@
-import csv
-import sys
+import pandas as pd
+import matplotlib.pyplot as plt
 from pathlib import Path
 
-import matplotlib.pyplot as plt
-import numpy as np
+import matplotlib as mpl
+import catppuccin
+
+mpl.style.use(catppuccin.PALETTE.macchiato.identifier)
+
+BASE=Path(__file__).parent
+
+DATA=BASE/"results"
+
+OUT=BASE/"plots"
+OUT.mkdir(exist_ok=True)
+
+cpp=pd.read_csv(DATA/"cpp_results.csv")
+py=pd.read_csv(DATA/"python_results.csv")
+
+df=pd.concat([cpp,py])
 
 
-def load_comparison(path: Path) -> list[dict]:
-    with path.open(newline="") as f:
-        return list(csv.DictReader(f))
+def plot_metric(metric,name):
 
+    fig,axs=plt.subplots(1,3,figsize=(18,5))
 
-def plot_metric(
-    rows: list[dict],
-    simd_col: str,
-    scalar_col: str,
-    py_col: str,
-    ylabel: str,
-    title: str,
-    output_path: Path,
-) -> None:
-    labels = []
-    simd_vals = []
-    scalar_vals = []
-    py_vals = []
+    for impl in df.impl.unique():
 
-    for row in rows:
-        label = f"{row['distance']}\n{row['dataset']}x{row['dim']}"
-        labels.append(label)
+        sub=df[df.impl==impl]
 
-        simd_vals.append(float(row[simd_col]) if row[simd_col] else 0)
-        scalar_vals.append(float(row[scalar_col]) if row[scalar_col] else 0)
-        py_vals.append(float(row[py_col]) if row[py_col] else 0)
+        axs[0].plot(sub["N"],sub[metric],marker="o",label=impl)
+        axs[1].plot(sub["DIM"],sub[metric],marker="o",label=impl)
+        axs[2].plot(sub["K"],sub[metric],marker="o",label=impl)
 
-    x = np.arange(len(labels))
-    width = 0.25
+    axs[0].set_title(f"{name} vs N")
+    axs[1].set_title(f"{name} vs DIM")
+    axs[2].set_title(f"{name} vs K")
 
-    fig, ax = plt.subplots(figsize=(max(14, len(labels) * 1.2), 7))
-
-    bars_simd = ax.bar(x - width, simd_vals, width, label="C++ SIMD", color="#2196F3")
-    bars_scalar = ax.bar(x, scalar_vals, width, label="C++ Scalar", color="#FF9800")
-    bars_py = ax.bar(x + width, py_vals, width, label="Python (hnswlib)", color="#4CAF50")
-
-    ax.set_xlabel("Scenario (distance / dataset x dim)")
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
-    ax.set_xticks(x)
-    ax.set_xticklabels(labels, fontsize=7, rotation=45, ha="right")
-    ax.legend()
-    ax.grid(axis="y", alpha=0.3)
+    for ax in axs:
+        ax.legend()
+        ax.grid(True)
 
     fig.tight_layout()
-    fig.savefig(output_path, dpi=150)
-    plt.close(fig)
-    print(f"  Saved {output_path.name}")
+
+    plt.savefig(OUT/f"{metric}.png",dpi=300)
+
+    print("saved",OUT/f"{metric}.png")
 
 
-def main() -> None:
-    if len(sys.argv) < 2:
-        raise SystemExit("Usage: plot.py <results_dir_name>")
+def main():
 
-    results_name = sys.argv[1]
-    base_dir = Path(__file__).resolve().parent
-    results_dir = base_dir / "results" / results_name
-    csv_path = results_dir / "comparison.csv"
+    plot_metric("build_us","Build Time")
+    plot_metric("query_us","Query Time")
 
-    if not csv_path.exists():
-        raise SystemExit(f"Missing comparison CSV: {csv_path}")
-
-    rows = load_comparison(csv_path)
-
-    print("\nGenerating plots...")
-
-    plot_metric(
-        rows,
-        simd_col="build_simd_s",
-        scalar_col="build_scalar_s",
-        py_col="build_py_s",
-        ylabel="Build Time (seconds)",
-        title="Build Time: C++ SIMD vs C++ Scalar vs Python",
-        output_path=results_dir / "build_time.png",
-    )
-
-    plot_metric(
-        rows,
-        simd_col="query_simd_us",
-        scalar_col="query_scalar_us",
-        py_col="query_py_us",
-        ylabel="Query Time (microseconds)",
-        title="Query Time: C++ SIMD vs C++ Scalar vs Python",
-        output_path=results_dir / "query_time.png",
-    )
-
-    print(f"\nPlots saved to {results_dir}\n")
+    plt.show()
 
 
-if __name__ == "__main__":
+if __name__=="__main__":
     main()
