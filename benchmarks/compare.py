@@ -23,14 +23,14 @@ def load():
 def compare(df):
 
     pivot = df.pivot_table(
-        index=["N", "DIM", "K"], columns="impl", values=["build_us", "query_us"]
+        index=["N", "DIM", "K"], columns="impl", values=["build_s", "query_us"]
     )
 
     pivot.columns = ["_".join(c) for c in pivot.columns]
 
     pivot["build_delta_%"] = (
-        (pivot["build_us_cpp_simd"] - pivot["build_us_python"])
-        / pivot["build_us_python"]
+        (pivot["build_s_cpp_simd"] - pivot["build_s_python"])
+        / pivot["build_s_python"]
         * 100
     )
 
@@ -56,7 +56,7 @@ def scaling_tables(df):
         for fixed in ["DIM", "N", "K"]:
             grp = sub.groupby([c for c in ["N", "DIM", "K"] if c != fixed])
 
-            t = grp[["build_us", "query_us"]].mean().reset_index()
+            t = grp[["build_s", "query_us"]].mean().reset_index()
 
             path = OUT / f"{impl}_fix_{fixed}.csv"
 

@@ -64,9 +64,11 @@ test: clean build
 
 # ----------------------------
 cppbench: build
+	@mkdir -p benchmarks/results
 	@./$(BUILD_DIR)/bench
 
 pybench:
+	@mkdir -p benchmarks/results
 	@echo "Setting up Python virtual environment..."
 	@if [ ! -d "$(VENV_DIR)" ]; then \
 	    $(PYTHON) -m venv $(VENV_DIR); \

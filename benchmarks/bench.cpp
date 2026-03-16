@@ -90,7 +90,7 @@ int main() {
     mt19937 gen(42);
 
     // CSV output
-    ofstream csv("results/cpp_results.csv");
+    ofstream csv("benchmarks/results/cpp_results.csv");
     csv << "impl,N,DIM,K,build_s,query_us,brute_us,speedup,recall\n";
 
     printTableHeader();
