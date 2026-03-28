@@ -103,34 +103,6 @@ make lint
 make lint-fix
 ```
 
-## Project Structure
-
-```
-proxima/
-  src/
-    hnsw.h              # HnswCPU class definition
-    hnsw.cpp            # HNSW graph construction and search
-    dist/
-      dispatch.h        # Distance type enum and dispatch
-      dispatch.cpp      # Runtime SIMD detection and dispatch
-      l2.h              # L2 distance (scalar, AVX2, NEON)
-      inner_product.h   # Inner product distance
-      cosine.h          # Cosine distance
-  tests/
-    test_hnsw.cpp       # GoogleTest unit tests
-  benchmarks/
-    bench.cpp           # C++ benchmark harness
-    bench.py            # Python hnswlib benchmark
-    compare.py          # Comparison analysis and report generation
-    plot.py             # Plotting with matplotlib + catppuccin theme
-    requirements.txt    # Python dependencies
-    results/            # Timestamped benchmark outputs
-  scripts/
-    setup.sh            # Dev environment setup
-  CMakeLists.txt
-  Makefile
-```
-
 ## References
 
 - Malkov, Y.A. and Yashunin, D.A., 2018. *Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs*. IEEE Transactions on Pattern Analysis and Machine Intelligence. [arXiv:1603.09320](https://arxiv.org/abs/1603.09320)
