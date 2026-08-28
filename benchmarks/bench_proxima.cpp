@@ -34,7 +34,9 @@ vector<int> bruteForceKNN(
             d += (data[i][j] - query[j]) * (data[i][j] - query[j]);
         dists[i] = {d, static_cast<int>(i)};
     }
-    partial_sort(dists.begin(), dists.begin() + static_cast<ptrdiff_t>(k), dists.end());
+    partial_sort(
+        dists.begin(), dists.begin() + static_cast<ptrdiff_t>(k), dists.end()
+    );
     vector<int> result(k);
     for (size_t i = 0; i < k; ++i)
         result[i] = dists[i].second;
@@ -98,59 +100,59 @@ int main(int argc, char *argv[]) {
         {1000, 256, 10},
         {1000, 256, 50},
 
-        // Medium datasets
-        {5000, 64, 5},
-        {5000, 64, 10},
-        {5000, 64, 50},
-        {5000, 128, 5},
-        {5000, 128, 10},
-        {5000, 128, 50},
-        {5000, 256, 5},
-        {5000, 256, 10},
-        {5000, 256, 50},
+        // // Medium datasets
+        // {5000, 64, 5},
+        // {5000, 64, 10},
+        // {5000, 64, 50},
+        // {5000, 128, 5},
+        // {5000, 128, 10},
+        // {5000, 128, 50},
+        // {5000, 256, 5},
+        // {5000, 256, 10},
+        // {5000, 256, 50},
 
-        {10000, 64, 5},
-        {10000, 64, 10},
-        {10000, 64, 50},
-        {10000, 128, 5},
-        {10000, 128, 10},
-        {10000, 128, 50},
-        {10000, 256, 5},
-        {10000, 256, 10},
-        {10000, 256, 50},
+        // {10000, 64, 5},
+        // {10000, 64, 10},
+        // {10000, 64, 50},
+        // {10000, 128, 5},
+        // {10000, 128, 10},
+        // {10000, 128, 50},
+        // {10000, 256, 5},
+        // {10000, 256, 10},
+        // {10000, 256, 50},
 
-        // Large datasets
-        {50000, 64, 5},
-        {50000, 64, 10},
-        {50000, 64, 50},
-        {50000, 128, 5},
-        {50000, 128, 10},
-        {50000, 128, 50},
-        {50000, 256, 5},
-        {50000, 256, 10},
-        {50000, 256, 50},
+        // // Large datasets
+        // {50000, 64, 5},
+        // {50000, 64, 10},
+        // {50000, 64, 50},
+        // {50000, 128, 5},
+        // {50000, 128, 10},
+        // {50000, 128, 50},
+        // {50000, 256, 5},
+        // {50000, 256, 10},
+        // {50000, 256, 50},
 
-        {100000, 64, 5},
-        {100000, 64, 10},
-        {100000, 64, 50},
-        {100000, 128, 5},
-        {100000, 128, 10},
-        {100000, 128, 50},
-        {100000, 256, 5},
-        {100000, 256, 10},
-        {100000, 256, 50},
+        // {100000, 64, 5},
+        // {100000, 64, 10},
+        // {100000, 64, 50},
+        // {100000, 128, 5},
+        // {100000, 128, 10},
+        // {100000, 128, 50},
+        // {100000, 256, 5},
+        // {100000, 256, 10},
+        // {100000, 256, 50},
 
-        // Extra-large datasets
-        {500000, 64, 5},
-        {500000, 64, 10},
-        {500000, 64, 50},
-        {500000, 128, 5},
-        {500000, 128, 10},
-        {500000, 128, 50},
-        {500000, 256, 5},
-        {500000, 256, 10},
-        {500000, 256, 50},
-        
+        // // Extra-large datasets
+        // {500000, 64, 5},
+        // {500000, 64, 10},
+        // {500000, 64, 50},
+        // {500000, 128, 5},
+        // {500000, 128, 10},
+        // {500000, 128, 50},
+        // {500000, 256, 5},
+        // {500000, 256, 10},
+        // {500000, 256, 50},
+
     };
 
     vector<Mode> modes = {{true, "cpp_scalar"}, {false, "cpp_simd"}};
@@ -192,17 +194,18 @@ int main(int argc, char *argv[]) {
                     }
             }
             auto t4 = high_resolution_clock::now();
-            double query_us =
-                duration_cast<microseconds>(t4 - t3).count() / static_cast<double>(qcount);
-            double recall = static_cast<double>(correct) / static_cast<double>(qcount);
+            double query_us = duration_cast<microseconds>(t4 - t3).count() /
+                              static_cast<double>(qcount);
+            double recall =
+                static_cast<double>(correct) / static_cast<double>(qcount);
 
             // Brute-force query
             auto t5 = high_resolution_clock::now();
             for (size_t i = 0; i < qcount; i++)
                 bruteForceKNN(data, data[i], s.K);
             auto t6 = high_resolution_clock::now();
-            double brute_us =
-                duration_cast<microseconds>(t6 - t5).count() / static_cast<double>(qcount);
+            double brute_us = duration_cast<microseconds>(t6 - t5).count() /
+                              static_cast<double>(qcount);
 
             double speedup = brute_us / query_us;
 

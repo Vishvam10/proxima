@@ -27,59 +27,54 @@ SCENARIOS = [
     Scenario(1000, 256, 5),
     Scenario(1000, 256, 10),
     Scenario(1000, 256, 50),
-
-    # Medium
-    Scenario(5000, 64, 5),
-    Scenario(5000, 64, 10),
-    Scenario(5000, 64, 50),
-    Scenario(5000, 128, 5),
-    Scenario(5000, 128, 10),
-    Scenario(5000, 128, 50),
-    Scenario(5000, 256, 5),
-    Scenario(5000, 256, 10),
-    Scenario(5000, 256, 50),
-
-    Scenario(10000, 64, 5),
-    Scenario(10000, 64, 10),
-    Scenario(10000, 64, 50),
-    Scenario(10000, 128, 5),
-    Scenario(10000, 128, 10),
-    Scenario(10000, 128, 50),
-    Scenario(10000, 256, 5),
-    Scenario(10000, 256, 10),
-    Scenario(10000, 256, 50),
-
-    # Large
-    Scenario(50000, 64, 5),
-    Scenario(50000, 64, 10),
-    Scenario(50000, 64, 50),
-    Scenario(50000, 128, 5),
-    Scenario(50000, 128, 10),
-    Scenario(50000, 128, 50),
-    Scenario(50000, 256, 5),
-    Scenario(50000, 256, 10),
-    Scenario(50000, 256, 50),
-
-    Scenario(100000, 64, 5),
-    Scenario(100000, 64, 10),
-    Scenario(100000, 64, 50),
-    Scenario(100000, 128, 5),
-    Scenario(100000, 128, 10),
-    Scenario(100000, 128, 50),
-    Scenario(100000, 256, 5),
-    Scenario(100000, 256, 10),
-    Scenario(100000, 256, 50),
-
-    # Extra large
-    Scenario(500000, 64, 5),
-    Scenario(500000, 64, 10),
-    Scenario(500000, 64, 50),
-    Scenario(500000, 128, 5),
-    Scenario(500000, 128, 10),
-    Scenario(500000, 128, 50),
-    Scenario(500000, 256, 5),
-    Scenario(500000, 256, 10),
-    Scenario(500000, 256, 50),
+    # # Medium
+    # Scenario(5000, 64, 5),
+    # Scenario(5000, 64, 10),
+    # Scenario(5000, 64, 50),
+    # Scenario(5000, 128, 5),
+    # Scenario(5000, 128, 10),
+    # Scenario(5000, 128, 50),
+    # Scenario(5000, 256, 5),
+    # Scenario(5000, 256, 10),
+    # Scenario(5000, 256, 50),
+    # Scenario(10000, 64, 5),
+    # Scenario(10000, 64, 10),
+    # Scenario(10000, 64, 50),
+    # Scenario(10000, 128, 5),
+    # Scenario(10000, 128, 10),
+    # Scenario(10000, 128, 50),
+    # Scenario(10000, 256, 5),
+    # Scenario(10000, 256, 10),
+    # Scenario(10000, 256, 50),
+    # # Large
+    # Scenario(50000, 64, 5),
+    # Scenario(50000, 64, 10),
+    # Scenario(50000, 64, 50),
+    # Scenario(50000, 128, 5),
+    # Scenario(50000, 128, 10),
+    # Scenario(50000, 128, 50),
+    # Scenario(50000, 256, 5),
+    # Scenario(50000, 256, 10),
+    # Scenario(50000, 256, 50),
+    # Scenario(100000, 64, 5),
+    # Scenario(100000, 64, 10),
+    # Scenario(100000, 64, 50),
+    # Scenario(100000, 128, 5),
+    # Scenario(100000, 128, 10),
+    # Scenario(100000, 128, 50),
+    # Scenario(100000, 256, 5),
+    # Scenario(100000, 256, 10),
+    # Scenario(100000, 256, 50),
+    # # Extra large
+    # Scenario(500000, 64, 5),
+    # Scenario(500000, 64, 10),
+    # Scenario(500000, 64, 50),
+    # Scenario(500000, 128, 5),
+    # Scenario(500000, 128, 10),
+    # Scenario(500000, 128, 50),
+    # Scenario(500000, 256, 5),
+    # Scenario(500000, 256, 10),
+    # Scenario(500000, 256, 50),
 ]
 
 
@@ -148,7 +143,7 @@ def benchmark_mode(
             M=16,
             ef_construction=200,
             seed=42,
-            dist_type=DistanceType.L2,
+            distance_type=DistanceType.L2,
             force_scalar=force_scalar,
         )
 
@@ -159,7 +154,6 @@ def benchmark_mode(
         build_s = time.perf_counter() - start
 
         qcount = min(100, scenario.N)
-
         correct = 0
 
         start = time.perf_counter()
@@ -174,12 +168,7 @@ def benchmark_mode(
             if int(i) in result:
                 correct += 1
 
-        query_us = (
-            (time.perf_counter() - start)
-            * 1_000_000
-            / qcount
-        )
-
+        query_us = (time.perf_counter() - start) * 1_000_000 / qcount
         recall = correct / qcount
 
         start = time.perf_counter()
@@ -191,12 +180,7 @@ def benchmark_mode(
                 scenario.K,
             )
 
-        brute_us = (
-            (time.perf_counter() - start)
-            * 1_000_000
-            / qcount
-        )
-
+        brute_us = (time.perf_counter() - start) * 1_000_000 / qcount
         speedup = brute_us / query_us
 
         print_row(
@@ -283,9 +267,7 @@ def main():
             rng,
         )
 
-    print(
-        f"\nSaved {output}"
-    )
+    print(f"\nSaved {output}")
 
 
 if __name__ == "__main__":

@@ -7,16 +7,18 @@ from pathlib import Path
 import pandas as pd
 
 
-BASE = Path(__file__).parent
-run_dir = sys.argv[1] if len(sys.argv) > 1 else "."
+if len(sys.argv) > 1:
+    OUT = Path(sys.argv[1])
+else:
+    OUT = Path("benchmarks/results")
 
-OUT = BASE / "results" / run_dir
-OUT.mkdir(exist_ok=True, parents=True)
+OUT.mkdir(parents=True, exist_ok=True)
 
 CPP = OUT / "cpp_results.csv"
 PY_BINDINGS = OUT / "python_bindings_results.csv"
 PY_HNSWLIB = OUT / "python_hnswlib_results.csv"
 
+run_dir = OUT.name
 
 def load():
     cpp = pd.read_csv(CPP)

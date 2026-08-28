@@ -1,3 +1,4 @@
+benchmarks/results/*
 .compile_commands.json
 
 .vscode

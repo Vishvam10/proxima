@@ -9,8 +9,11 @@ RESULTS_DIR := benchmarks/results
 PYTHON_VERSION ?= 3.13
 
 PYTHON := uv run python
+
 CMAKE := cmake
+
 CLANG_FORMAT := clang-format
+
 CLANG_TIDY := clang-tidy
 
 CMAKE_FLAGS := \
@@ -129,26 +132,107 @@ package-check: package
 	uvx twine check dist/*
 
 
-.PHONY: package-test
+# --------------------------------------------------
+# Local Package Test
+# --------------------------------------------------
 
-package-test: package
+.PHONY: package-local
+
+package-local: package
 	@set -e; \
-	rm -rf /tmp/proxima-package-test; \
+	TEST_VENV=/tmp/proxima-package-test; \
+	rm -rf "$$TEST_VENV"; \
 	uv venv \
 		--python $(PYTHON_VERSION) \
-		/tmp/proxima-package-test; \
+		"$$TEST_VENV"; \
 	uv pip install \
-		--python /tmp/proxima-package-test/bin/python \
+		--python "$$TEST_VENV/bin/python" \
 		dist/*.whl; \
 	uv pip install \
-		--python /tmp/proxima-package-test/bin/python \
+		--python "$$TEST_VENV/bin/python" \
 		pytest numpy; \
-	cd /tmp/proxima-package-test; \
-	./bin/python -c \
+	"$$TEST_VENV/bin/python" -c \
 		"import proxima; print('Proxima imported from:', proxima.__file__)"; \
-	./bin/python -m pytest \
+	"$$TEST_VENV/bin/python" -m pytest \
 		$(CURDIR)/tests/python \
-		-v
+		-v; \
+	rm -rf "$$TEST_VENV"
+
+
+# --------------------------------------------------
+# Python Package Publishing
+# --------------------------------------------------
+
+.PHONY: package-test
+
+# Push to https://test.pypi.org/legacy, create temp venv, install proxima there,
+# run the test cases and then clean stuff up
+package-test: package
+	@set -e; \
+	TEST_VENV=$$(mktemp -d /tmp/proxima-package-test.XXXXXX); \
+	trap 'rm -rf "$$TEST_VENV"' EXIT; \
+	echo "Testing package in $$TEST_VENV"; \
+	uv venv \
+		--python $(PYTHON_VERSION) \
+		"$$TEST_VENV"; \
+	uv pip install \
+		--python "$$TEST_VENV/bin/python" \
+		dist/*.whl; \
+	uv pip install \
+		--python "$$TEST_VENV/bin/python" \
+		"pytest>=8" \
+		"numpy>=1.24"; \
+	"$$TEST_VENV/bin/python" \
+		-c "import proxima; print('Proxima imported from:', proxima.__file__)"; \
+	"$$TEST_VENV/bin/python" \
+		-m pytest \
+		$(CURDIR)/tests/python \
+		-v; \
+	echo "Package test passed."
+
+
+.PHONY: publish-test
+
+publish-test: package
+	@set -e; \
+	if [ -z "$(TOKEN)" ]; then \
+		echo "Usage: make publish-test TOKEN=pypi-..."; \
+		exit 1; \
+	fi; \
+	echo "Uploading to TestPyPI..."; \
+	uv publish \
+		--token "$(TOKEN)" \
+		--publish-url https://test.pypi.org/legacy/ \
+		dist/*; \
+	TEST_VENV=$$(mktemp -d /tmp/proxima-test.XXXXXX); \
+	trap 'rm -rf "$$TEST_VENV"' EXIT; \
+	echo "Testing published package in $$TEST_VENV"; \
+	uv venv \
+		--python $(PYTHON_VERSION) \
+		"$$TEST_VENV"; \
+	uv pip install \
+		--python "$$TEST_VENV/bin/python" \
+		--index-url https://test.pypi.org/simple/ \
+		--extra-index-url https://pypi.org/simple/ \
+		proxima==$(shell uv run python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])'); \
+	uv pip install \
+		--python "$$TEST_VENV/bin/python" \
+		"pytest>=8" \
+		"numpy>=1.24"; \
+	"$$TEST_VENV/bin/python" \
+		-c "import proxima; print('Proxima imported from:', proxima.__file__)"; \
+	"$$TEST_VENV/bin/python" \
+		-m pytest \
+		$(CURDIR)/tests/python \
+		-v; \
+	echo "TestPyPI publish and package test passed."
+
+.PHONY: publish
+
+publish: release-check
+	@test -n "$(TOKEN)" || (echo "ERROR: TOKEN is required"; exit 1)
+	UV_PUBLISH_TOKEN="$(TOKEN)" uv publish dist/*
+
 
 # --------------------------------------------------
 # C++ Benchmarks
@@ -270,7 +354,7 @@ ci:
 	$(MAKE) build
 	$(MAKE) test
 	$(MAKE) python-test
-	$(MAKE) package-test
+	$(MAKE) package-local
 
 
 # --------------------------------------------------
@@ -285,7 +369,7 @@ release-check:
 	$(MAKE) build
 	$(MAKE) test
 	$(MAKE) python-test
-	$(MAKE) package-test
+	$(MAKE) package-local
 	$(MAKE) package-check
 	@echo "Release checks passed."
 
@@ -319,10 +403,12 @@ help:
 	@echo "  make wheel                 Build wheel only"
 	@echo "  make sdist                 Build source distribution"
 	@echo "  make package-check         Validate distributions"
-	@echo "  make package-test          Test actual wheel in clean venv"
+	@echo "  make package-local         Test wheel in clean local venv"
+	@echo "  make package-test          Alias for package-local"
 	@echo ""
-	@echo "Packaging Python version: $(PYTHON_VERSION)"
-	@echo "  Override with: make package PYTHON_VERSION=3.12"
+	@echo "Publishing:"
+	@echo "  make publish-test TOKEN=... Upload to TestPyPI"
+	@echo "  make publish TOKEN=...      Upload to PyPI"
 	@echo ""
 	@echo "Benchmarks:"
 	@echo "  make cppbench              Run C++ benchmark"

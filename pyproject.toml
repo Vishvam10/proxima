@@ -1,6 +1,6 @@
 [project]
 name = "proxima"
-version = "0.1.0"
+version = "0.1.1"
 description = "A C++17 implementation of the HNSW approximate nearest neighbor search algorithm"
 readme = "README.md"
 requires-python = ">=3.12"
@@ -8,7 +8,9 @@ license = { text = "MIT" }
 authors = [
     { name = "Vishvam S" }
 ]
-dependencies = []
+dependencies = [
+    "matplotlib<3.11",
+]
 
 [project.optional-dependencies]
 test = [

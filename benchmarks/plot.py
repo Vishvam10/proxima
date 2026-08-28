@@ -2,53 +2,49 @@ import sys
 from pathlib import Path
 
 import matplotlib
-import pandas as pd
 
 matplotlib.use("Agg")
 
 import matplotlib.pyplot as plt
-
+import pandas as pd
 import catppuccin
 
 
-matplotlib.style.use(
-    catppuccin.PALETTE.macchiato.identifier
-)
+# Use Catppuccin Macchiato styling.
+matplotlib.style.use(catppuccin.PALETTE.macchiato.identifier)
 
 
-BASE = Path(__file__).parent
+# --------------------------------------------------
+# Input / Output
+# --------------------------------------------------
 
-run_dir = (
-    sys.argv[1]
-    if len(sys.argv) > 1
-    else "."
-)
+if len(sys.argv) > 1:
+    OUT = Path(sys.argv[1])
+else:
+    OUT = Path("benchmarks/results")
 
-DATA = BASE / "results" / run_dir
-OUT = DATA / "plots"
+OUT.mkdir(parents=True, exist_ok=True)
 
-OUT.mkdir(
-    exist_ok=True,
-    parents=True,
-)
+CPP = OUT / "cpp_results.csv"
+PY_BINDINGS = OUT / "python_bindings_results.csv"
+PY_HNSWLIB = OUT / "python_hnswlib_results.csv"
 
-
-CPP = pd.read_csv(
-    DATA / "cpp_results.csv"
-)
-
-PY_BINDINGS = pd.read_csv(
-    DATA / "python_bindings_results.csv"
-)
-
-PY_HNSWLIB = pd.read_csv(
-    DATA / "python_hnswlib_results.csv"
-)
+PLOTS = OUT / "plots"
+PLOTS.mkdir(parents=True, exist_ok=True)
 
 
-cpp = CPP.copy()
-python_bindings = PY_BINDINGS.copy()
-python_hnswlib = PY_HNSWLIB.copy()
+# --------------------------------------------------
+# Load data
+# --------------------------------------------------
+
+cpp = pd.read_csv(CPP)
+python_bindings = pd.read_csv(PY_BINDINGS)
+python_hnswlib = pd.read_csv(PY_HNSWLIB)
+
+# Normalize implementation names so all datasets can
+# be plotted together.
+python_bindings["impl"] = "python_bindings"
+python_hnswlib["impl"] = "python_hnswlib"
 
 df = pd.concat(
     [
@@ -60,135 +56,154 @@ df = pd.concat(
 )
 
 
+# --------------------------------------------------
+# Display names
+# --------------------------------------------------
+
 DISPLAY_NAMES = {
     "cpp_scalar": "C++ Scalar",
     "cpp_simd": "C++ SIMD",
     "python_bindings": "Python Bindings",
+    "python_bindings_scalar": "Python Bindings Scalar",
+    "python_bindings_simd": "Python Bindings SIMD",
     "python_hnswlib": "Python hnswlib",
     "python": "Python hnswlib",
 }
 
 
 def display_name(impl):
-    return DISPLAY_NAMES.get(
-        impl,
-        impl,
-    )
+    return DISPLAY_NAMES.get(impl, impl)
+
+
+# --------------------------------------------------
+# Plot
+# --------------------------------------------------
 
 
 def plot_metric(
     metric: str,
     y_label: str,
-    global_title: str,
+    title: str,
 ):
-    Ns = sorted(df.N.unique())
+    # Every (N, K) combination gets its own subplot.
+    groups = (
+        df[["N", "K"]]
+        .drop_duplicates()
+        .sort_values(["N", "K"])
+        .itertuples(index=False, name=None)
+    )
 
-    # The benchmark currently has up to:
-    #
-    # 1K
-    # 5K
-    # 10K
-    # 50K
-    # 100K
-    # 500K
-    #
-    # So 2 x 3 works nicely.
-    rows = 2
-    cols = 3
+    groups = list(groups)
+
+    if not groups:
+        print("No benchmark data found.")
+        return
+
+    # Dynamic grid.
+    cols = min(3, len(groups))
+    rows = (len(groups) + cols - 1) // cols
 
     fig, axs = plt.subplots(
         rows,
         cols,
-        figsize=(20, 12),
+        figsize=(7 * cols, 5.5 * rows),
+        squeeze=False,
     )
 
     axs = axs.flatten()
 
-    lines = []
-    labels = []
+    # One legend entry per implementation.
+    legend_handles = {}
+    legend_labels = {}
 
-    for i, N in enumerate(Ns):
+    for i, (N, K) in enumerate(groups):
         ax = axs[i]
 
-        dfN = df[df.N == N]
+        subset = df[(df["N"] == N) & (df["K"] == K)]
 
-        for impl in dfN.impl.unique():
-            sub = dfN[dfN.impl == impl]
+        implementations = sorted(subset["impl"].unique())
 
-            for K in sorted(sub.K.unique()):
-                dfK = (
-                    sub[sub.K == K]
-                    .sort_values("DIM")
-                )
+        for impl in implementations:
+            sub = subset[subset["impl"] == impl].sort_values("DIM")
 
-                if metric not in dfK:
-                    continue
+            if sub.empty or metric not in sub.columns:
+                continue
 
-                label = (
-                    f"{display_name(impl)} "
-                    f"(K={K})"
-                )
+            (line,) = ax.plot(
+                sub["DIM"],
+                sub[metric],
+                marker="o",
+                linewidth=2,
+                markersize=5,
+                label=display_name(impl),
+            )
 
-                line, = ax.plot(
-                    dfK["DIM"],
-                    dfK[metric],
-                    marker="o",
-                    label=label,
-                )
+            label = display_name(impl)
 
-                if label not in labels:
-                    lines.append(line)
-                    labels.append(label)
+            if label not in legend_handles:
+                legend_handles[label] = line
+                legend_labels[label] = label
 
         ax.set_title(
-            f"N = {N}",
-            pad=15,
+            f"N = {N:,}, K = {K}",
+            fontsize=14,
+            fontweight="bold",
+            pad=12,
         )
 
         ax.set_xlabel(
-            "DIM",
-            labelpad=10,
+            "Dimension",
+            labelpad=8,
         )
 
         ax.set_ylabel(
             y_label,
-            labelpad=10,
+            labelpad=8,
         )
+
+        ax.set_xticks(sorted(subset["DIM"].unique()))
 
         ax.grid(
             True,
-            alpha=0.3,
+            alpha=0.25,
         )
 
-    # Hide unused axes if the number of N values
-    # is less than rows * cols.
-    for i in range(len(Ns), len(axs)):
+        ax.tick_params(
+            axis="both",
+            labelsize=10,
+        )
+
+    # Hide unused axes.
+    for i in range(len(groups), len(axs)):
         axs[i].set_visible(False)
 
     fig.suptitle(
-        global_title,
-        fontsize=24,
-        y=0.94,
+        title,
+        fontsize=20,
         fontweight="bold",
+        y=0.995,
     )
 
+    # Single shared legend for the entire figure.
     fig.legend(
-        handles=lines,
-        labels=labels,
+        legend_handles.values(),
+        legend_labels.values(),
         loc="upper center",
-        bbox_to_anchor=(0.5, 0.89),
-        ncol=3,
+        bbox_to_anchor=(0.5, 0.94),
+        ncol=min(4, len(legend_handles)),
         frameon=False,
-        fontsize=12,
+        fontsize=10,
     )
 
-    plt.tight_layout(
-        rect=[0.02, 0.02, 0.98, 0.83]
+    fig.tight_layout(
+        rect=[0.02, 0.02, 0.98, 0.87],
+        h_pad=3,
+        w_pad=2,
     )
 
-    output = OUT / f"{metric}.png"
+    output = PLOTS / f"{metric}.png"
 
-    plt.savefig(
+    fig.savefig(
         output,
         dpi=300,
         bbox_inches="tight",
@@ -197,6 +212,11 @@ def plot_metric(
     plt.close(fig)
 
     print(f"Saved plot: {output}")
+
+
+# --------------------------------------------------
+# Main
+# --------------------------------------------------
 
 
 def main():
@@ -208,7 +228,7 @@ def main():
 
     plot_metric(
         "query_us",
-        "Query Time (us)",
+        "Query Time (µs)",
         "Query Time Comparison",
     )
 
