@@ -33,15 +33,19 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
-      - name: Build
-        run: |
-          uv build
+      - name: Build wheel
+        run: uv build --wheel
+
+      - name: Build sdist
+        if: matrix.os == 'ubuntu-latest'
+        run: uv build --sdist
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
           name: release-${{ matrix.os }}
           path: dist/
+
 
   release:
     name: Create GitHub Release
@@ -69,6 +73,7 @@ jobs:
             *.whl
             *.tar.gz
 
+
   publish-pypi:
     name: Publish to PyPI
 
@@ -78,7 +83,7 @@ jobs:
 
     environment:
       name: pypi
-      url: https://pypi.org/p/proxima
+      url: https://pypi.org/p/proxima-hnsw
 
     permissions:
       id-token: write
@@ -88,8 +93,10 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           path: dist
+          pattern: release-*
+          merge-multiple: true
 
       - name: Publish to PyPI
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
-          packages-dir: dist
+          packages-dir: dist/
