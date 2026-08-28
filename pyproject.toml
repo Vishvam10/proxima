@@ -1,7 +1,7 @@
 [project]
 name = "proxima"
-version = "0.1.1"
-description = "A C++17 implementation of the HNSW approximate nearest neighbor search algorithm"
+version = "0.1.2"
+description = "A high-performance C++17 implementation of the Hierarchical Navigable Small World (HNSW) algorithm for approximate nearest neighbor search, with Python bindings and SIMD-optimized search"
 readme = "README.md"
 requires-python = ">=3.12"
 license = { text = "MIT" }
