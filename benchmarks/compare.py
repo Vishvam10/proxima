@@ -2,72 +2,180 @@ import os
 import platform
 import subprocess
 import sys
-
-import pandas as pd
 from pathlib import Path
 
-BASE = Path(__file__).parent
+import pandas as pd
 
+
+BASE = Path(__file__).parent
 run_dir = sys.argv[1] if len(sys.argv) > 1 else "."
+
 OUT = BASE / "results" / run_dir
 OUT.mkdir(exist_ok=True, parents=True)
 
 CPP = OUT / "cpp_results.csv"
-PY = OUT / "python_results.csv"
+PY_BINDINGS = OUT / "python_bindings_results.csv"
+PY_HNSWLIB = OUT / "python_hnswlib_results.csv"
 
 
 def load():
     cpp = pd.read_csv(CPP)
-    py = pd.read_csv(PY)
-    df = pd.concat([cpp, py], ignore_index=True)
-    return df
+    py_bindings = pd.read_csv(PY_BINDINGS)
+    py_hnswlib = pd.read_csv(PY_HNSWLIB)
+
+    return {
+        "cpp": cpp,
+        "python_bindings": py_bindings,
+        "python_hnswlib": py_hnswlib,
+    }
 
 
-def compare(df):
-    pivot = df.pivot_table(
-        index=["N", "DIM", "K"], columns="impl", values=["build_s", "query_us"]
+def compare(datasets):
+    cpp = datasets["cpp"]
+    py_bindings = datasets["python_bindings"]
+    py_hnswlib = datasets["python_hnswlib"]
+
+    # We compare against the SIMD C++ implementation since that is
+    # the optimized native implementation.
+    cpp_simd = cpp[cpp["impl"] == "cpp_simd"].copy()
+
+    bindings = py_bindings.copy()
+    hnswlib = py_hnswlib.copy()
+
+    bindings["impl"] = "python_bindings"
+    hnswlib["impl"] = "python_hnswlib"
+
+    merged = cpp_simd.merge(
+        bindings,
+        on=["N", "DIM", "K"],
+        suffixes=("_cpp", "_bindings"),
     )
 
-    pivot.columns = ["_".join(c) for c in pivot.columns]
+    merged = merged.merge(
+        hnswlib,
+        on=["N", "DIM", "K"],
+    )
 
-    pivot["build_delta_%"] = (
-        (pivot["build_s_cpp_simd"] - pivot["build_s_python"])
-        / pivot["build_s_python"]
+    merged = merged.rename(
+        columns={
+            "build_s": "build_s_hnswlib",
+            "query_us": "query_us_hnswlib",
+            "speedup": "speedup_hnswlib",
+            "recall": "recall_hnswlib",
+        }
+    )
+
+    merged["build_s_bindings_delta_%"] = (
+        (merged["build_s_bindings"] - merged["build_s_cpp"])
+        / merged["build_s_cpp"]
         * 100
     )
 
-    pivot["query_delta_%"] = (
-        (pivot["query_us_cpp_simd"] - pivot["query_us_python"])
-        / pivot["query_us_python"]
+    merged["query_bindings_delta_%"] = (
+        (merged["query_us_bindings"] - merged["query_us_cpp"])
+        / merged["query_us_cpp"]
         * 100
     )
 
-    pivot.reset_index(inplace=True)
-    pivot.to_csv(OUT / "comparison.csv", index=False)
+    merged["build_s_hnswlib_delta_%"] = (
+        (merged["build_s_hnswlib"] - merged["build_s_cpp"])
+        / merged["build_s_cpp"]
+        * 100
+    )
 
-    print("\nC++ vs Python\n")
-    print(pivot)
+    merged["query_hnswlib_delta_%"] = (
+        (merged["query_us_hnswlib"] - merged["query_us_cpp"])
+        / merged["query_us_cpp"]
+        * 100
+    )
 
-    return pivot
+    merged["bindings_vs_hnswlib_query_delta_%"] = (
+        (merged["query_us_bindings"] - merged["query_us_hnswlib"])
+        / merged["query_us_hnswlib"]
+        * 100
+    )
+
+    merged["bindings_vs_hnswlib_build_delta_%"] = (
+        (merged["build_s_bindings"] - merged["build_s_hnswlib"])
+        / merged["build_s_hnswlib"]
+        * 100
+    )
+
+    output_columns = [
+        "N",
+        "DIM",
+        "K",
+        "build_s_cpp",
+        "build_s_bindings",
+        "build_s_hnswlib",
+        "query_us_cpp",
+        "query_us_bindings",
+        "query_us_hnswlib",
+        "recall_cpp",
+        "recall_bindings",
+        "recall_hnswlib",
+        "build_s_bindings_delta_%",
+        "query_bindings_delta_%",
+        "build_s_hnswlib_delta_%",
+        "query_hnswlib_delta_%",
+        "bindings_vs_hnswlib_build_delta_%",
+        "bindings_vs_hnswlib_query_delta_%",
+    ]
+
+    # Only include columns that actually exist. This makes the comparison
+    # tolerant of benchmarks that don't emit recall.
+    output_columns = [
+        column for column in output_columns if column in merged.columns
+    ]
+
+    comparison = merged[output_columns]
+
+    comparison.to_csv(
+        OUT / "comparison.csv",
+        index=False,
+    )
+
+    print("\nC++ SIMD vs Python Bindings vs hnswlib\n")
+    print(comparison.to_string(index=False))
+
+    return comparison
 
 
-def scaling_tables(df):
-    for impl in df.impl.unique():
-        sub = df[df.impl == impl]
-
+def scaling_tables(datasets):
+    for name, df in datasets.items():
         for fixed in ["DIM", "N", "K"]:
-            grp = sub.groupby([c for c in ["N", "DIM", "K"] if c != fixed])
-            t = grp[["build_s", "query_us"]].mean().reset_index()
-            path = OUT / f"{impl}_fix_{fixed}.csv"
-            t.to_csv(path, index=False)
+            group_columns = [
+                column
+                for column in ["N", "DIM", "K"]
+                if column != fixed
+            ]
 
-            print(f"\n{impl} fixed {fixed}\n")
-            print(t)
+            table = (
+                df.groupby(group_columns)[["build_s", "query_us"]]
+                .mean()
+                .reset_index()
+            )
+
+            path = OUT / f"{name}_fix_{fixed}.csv"
+
+            table.to_csv(
+                path,
+                index=False,
+            )
+
+            print(f"\n{name} fixed {fixed}\n")
+            print(table.to_string(index=False))
 
 
 def get_system_info():
     info = {}
-    info["Operating System"] = f"{platform.system()} {platform.mac_ver()[0] or platform.release()}"
+
+    if platform.system() == "Darwin":
+        os_version = platform.mac_ver()[0] or platform.release()
+    else:
+        os_version = platform.release()
+
+    info["Operating System"] = f"{platform.system()} {os_version}"
     info["Architecture"] = platform.machine()
     info["CPU"] = platform.processor() or platform.machine()
 
@@ -75,44 +183,73 @@ def get_system_info():
     info["CPU Cores"] = str(logical)
 
     try:
-        mem_bytes = os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
-        info["Memory"] = f"{mem_bytes / (1024 ** 3):.1f} GB"
-    except (ValueError, AttributeError):
+        mem_bytes = (
+            os.sysconf("SC_PAGE_SIZE")
+            * os.sysconf("SC_PHYS_PAGES")
+        )
+
+        info["Memory"] = (
+            f"{mem_bytes / (1024 ** 3):.1f} GB"
+        )
+
+    except (ValueError, AttributeError, OSError):
         try:
             result = subprocess.run(
                 ["sysctl", "-n", "hw.memsize"],
-                capture_output=True, text=True, check=True
+                capture_output=True,
+                text=True,
+                check=True,
             )
+
             mem_bytes = int(result.stdout.strip())
-            info["Memory"] = f"{mem_bytes / (1024 ** 3):.1f} GB"
+
+            info["Memory"] = (
+                f"{mem_bytes / (1024 ** 3):.1f} GB"
+            )
+
         except Exception:
             info["Memory"] = "unknown"
 
     info["Python Version"] = platform.python_version()
+
     return info
 
 
 def df_to_markdown(df, float_fmt=".4f"):
+    if df.empty:
+        return "_No results._"
+
     cols = df.columns.tolist()
+
     header = "| " + " | ".join(cols) + " |"
-    sep = "| " + " | ".join(["---"] * len(cols)) + " |"
+    separator = "| " + " | ".join(
+        ["---"] * len(cols)
+    ) + " |"
+
     rows = []
+
     for _, row in df.iterrows():
         cells = []
-        for c in cols:
-            v = row[c]
-            if isinstance(v, float):
-                cells.append(f"{v:{float_fmt}}")
+
+        for column in cols:
+            value = row[column]
+
+            if isinstance(value, float):
+                cells.append(f"{value:{float_fmt}}")
             else:
-                cells.append(str(v))
+                cells.append(str(value))
+
         rows.append("| " + " | ".join(cells) + " |")
-    return "\n".join([header, sep] + rows)
+
+    return "\n".join(
+        [header, separator] + rows
+    )
 
 
-def generate_report(df, comparison):
+def generate_report(datasets, comparison):
     lines = []
 
-    lines.append("## Benchmark Report")
+    lines.append("# Benchmark Report")
     lines.append("")
     lines.append(f"Run: `{run_dir}`")
     lines.append("")
@@ -121,48 +258,75 @@ def generate_report(df, comparison):
     lines.append("")
     lines.append("| Property | Value |")
     lines.append("| --- | --- |")
-    for key, val in get_system_info().items():
-        lines.append(f"| {key} | {val} |")
+
+    for key, value in get_system_info().items():
+        lines.append(f"| {key} | {value} |")
+
     lines.append("")
+
+    cpp = datasets["cpp"]
+    bindings = datasets["python_bindings"]
+    hnswlib = datasets["python_hnswlib"]
 
     lines.append("## C++ Benchmark Results")
     lines.append("")
-    cpp_df = df[df.impl.str.startswith("cpp")]
-    lines.append(df_to_markdown(cpp_df))
+    lines.append(df_to_markdown(cpp))
     lines.append("")
 
-    lines.append("## Python (hnswlib) Benchmark Results")
+    lines.append("## Python Bindings Benchmark Results")
     lines.append("")
-    py_df = df[df.impl == "python"]
-    lines.append(df_to_markdown(py_df))
+    lines.append(df_to_markdown(bindings))
     lines.append("")
 
-    lines.append("## Comparison (C++ SIMD vs Python)")
+    lines.append("## Python hnswlib Benchmark Results")
+    lines.append("")
+    lines.append(df_to_markdown(hnswlib))
+    lines.append("")
+
+    lines.append("## Comparison")
+    lines.append("")
+    lines.append(
+        "The comparison uses the optimized `cpp_simd` "
+        "implementation as the native baseline."
+    )
     lines.append("")
     lines.append(df_to_markdown(comparison))
     lines.append("")
 
     lines.append("## Plots")
     lines.append("")
+
     lines.append("### Build Time Comparison")
     lines.append("")
     lines.append("![Build Time](plots/build_s.png)")
     lines.append("")
+
     lines.append("### Query Time Comparison")
     lines.append("")
     lines.append("![Query Time](plots/query_us.png)")
     lines.append("")
 
     report_path = OUT / "report.md"
-    report_path.write_text("\n".join(lines))
+
+    report_path.write_text(
+        "\n".join(lines)
+    )
+
     print(f"\nReport saved to {report_path}")
 
 
 def main():
-    df = load()
-    comparison = compare(df)
-    scaling_tables(df)
-    generate_report(df, comparison)
+    datasets = load()
+
+    comparison = compare(datasets)
+
+    scaling_tables(datasets)
+
+    generate_report(
+        datasets,
+        comparison,
+    )
+
     print("\nAnalysis saved to", OUT)
 
 

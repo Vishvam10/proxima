@@ -1,4 +1,4 @@
-#include "hnsw.h"
+#include "proxima/hnsw.h"
 
 #include <algorithm>
 #include <chrono>
@@ -11,6 +11,7 @@
 
 using namespace std;
 using namespace std::chrono;
+using namespace proxima;
 
 struct Scenario {
     size_t N, DIM, K;

@@ -10,7 +10,7 @@ BASE = Path(__file__).parent
 run_dir = sys.argv[1] if len(sys.argv) > 1 else "."
 OUT = BASE / "results" / run_dir
 OUT.mkdir(exist_ok=True, parents=True)
-csv_path = OUT / "python_results.csv"
+csv_path = OUT / "python_hnswlib_results.csv"
 
 SCENARIOS = [
     # Small datasets
