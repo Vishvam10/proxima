@@ -1,3 +1,4 @@
+/dist/
 /benchmarks/results/
 .compile_commands.json
 
@@ -90,7 +91,6 @@ __pycache__/
 .Python
 build/
 develop-eggs/
-dist/
 downloads/
 eggs/
 .eggs/
