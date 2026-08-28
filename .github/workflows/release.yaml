@@ -7,11 +7,11 @@ on:
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
-  build:
-    name: Build (${{ matrix.os }})
-
+  build-wheels:
+    name: Build wheels (${{ matrix.os }})
     strategy:
       fail-fast: false
       matrix:
@@ -33,22 +33,61 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
-      - name: Build packages
-        run: |
-          uv build
+      - name: Install cibuildwheel
+        run: uv tool install cibuildwheel
 
-      - name: Test wheel
+      - name: Build wheels
+        run: |
+          cibuildwheel --output-dir dist
+
+      - name: Build source distribution
+        run: |
+          uv build --sdist
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.os }}
+          path: dist/
+
+
+  test:
+    name: Test package
+    needs: build-wheels
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          merge-multiple: true
+          path: dist
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Test Linux wheel
         shell: bash
         run: |
-          WHEEL=$(find dist -name '*.whl' -print -quit)
+          WHEEL=$(find dist -name '*manylinux*.whl' -print -quit)
 
           if [ -z "$WHEEL" ]; then
-            echo "No wheel found"
+            echo "No manylinux wheel found"
+            find dist -type f
             exit 1
           fi
 
           TEST_VENV=$(mktemp -d)
-
           trap 'rm -rf "$TEST_VENV"' EXIT
 
           uv venv \
@@ -72,51 +111,26 @@ jobs:
             tests/python \
             -v
 
-      - name: Upload packages
-        uses: actions/upload-artifact@v4
-        with:
-          name: packages-${{ matrix.os }}
-          path: dist/
 
   publish:
     name: Publish to PyPI
-    needs: build
+    needs: test
     runs-on: ubuntu-latest
-
-    permissions:
-      id-token: write
-      contents: read
 
     steps:
       - name: Download packages
         uses: actions/download-artifact@v4
         with:
           pattern: packages-*
-          path: dist/
           merge-multiple: true
+          path: dist
 
-      - name: List packages
-        run: |
-          ls -lh dist/
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
 
       - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-
-  github-release:
-    name: Create GitHub Release
-    needs: build
-    runs-on: ubuntu-latest
-
-    permissions:
-      contents: write
-
-    steps:
-      - name: Download packages
-        uses: actions/download-artifact@v4
-        with:
-          pattern: packages-*
-          path: dist/
-          merge-multiple: true
+        run: |
+          uv publish dist/*
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

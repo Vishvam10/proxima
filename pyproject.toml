@@ -33,6 +33,10 @@ requires = [
 ]
 build-backend = "scikit_build_core.build"
 
+[tool.cibuildwheel]
+build = "cp312-*"
+skip = "*-musllinux_*"
+
 [tool.scikit-build]
 minimum-version = "build-system.requires"
 
