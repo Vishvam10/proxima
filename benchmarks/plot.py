@@ -5,10 +5,9 @@ import matplotlib
 
 matplotlib.use("Agg")
 
+import catppuccin
 import matplotlib.pyplot as plt
 import pandas as pd
-import catppuccin
-
 
 # Use Catppuccin Macchiato styling.
 matplotlib.style.use(catppuccin.PALETTE.macchiato.identifier)

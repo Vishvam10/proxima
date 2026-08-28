@@ -1,10 +1,10 @@
+import argparse
 import csv
-import sys
 import time
+from pathlib import Path
+
 import hnswlib
 import numpy as np
-import argparse
-from pathlib import Path
 
 BASE = Path(__file__).parent
 

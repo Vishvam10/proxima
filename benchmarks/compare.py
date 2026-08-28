@@ -6,7 +6,6 @@ from pathlib import Path
 
 import pandas as pd
 
-
 if len(sys.argv) > 1:
     OUT = Path(sys.argv[1])
 else:
