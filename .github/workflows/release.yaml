@@ -3,14 +3,14 @@ name: Release
 on:
   push:
     tags:
-      - "v*.*.*"
+      - "v*"
 
 permissions:
   contents: write
 
 jobs:
   build:
-    name: Build packages
+    name: Build (${{ matrix.os }})
 
     strategy:
       fail-fast: false
@@ -33,70 +33,93 @@ jobs:
       - name: Set up Python
         run: uv python install 3.12
 
-      - name: Build wheel
-        run: uv build --wheel
+      - name: Build packages
+        run: |
+          uv build
 
-      - name: Build sdist
-        if: matrix.os == 'ubuntu-latest'
-        run: uv build --sdist
+      - name: Test wheel
+        shell: bash
+        run: |
+          WHEEL=$(find dist -name '*.whl' -print -quit)
 
-      - name: Upload artifacts
+          if [ -z "$WHEEL" ]; then
+            echo "No wheel found"
+            exit 1
+          fi
+
+          TEST_VENV=$(mktemp -d)
+
+          trap 'rm -rf "$TEST_VENV"' EXIT
+
+          uv venv \
+            --python 3.12 \
+            "$TEST_VENV"
+
+          uv pip install \
+            --python "$TEST_VENV/bin/python" \
+            "$WHEEL"
+
+          uv pip install \
+            --python "$TEST_VENV/bin/python" \
+            "pytest>=8" \
+            "numpy>=1.24"
+
+          "$TEST_VENV/bin/python" \
+            -c "import proxima; print('Proxima imported from:', proxima.__file__)"
+
+          "$TEST_VENV/bin/python" \
+            -m pytest \
+            tests/python \
+            -v
+
+      - name: Upload packages
         uses: actions/upload-artifact@v4
         with:
-          name: release-${{ matrix.os }}
+          name: packages-${{ matrix.os }}
           path: dist/
 
-
-  release:
-    name: Create GitHub Release
-
+  publish:
+    name: Publish to PyPI
     needs: build
-
     runs-on: ubuntu-latest
 
+    permissions:
+      id-token: write
+      contents: read
+
     steps:
-      - name: Download artifacts
+      - name: Download packages
         uses: actions/download-artifact@v4
         with:
-          path: dist
+          pattern: packages-*
+          path: dist/
+          merge-multiple: true
 
-      - name: Flatten artifacts
+      - name: List packages
         run: |
-          find dist -type f -exec mv {} . \;
-          rm -rf dist
+          ls -lh dist/
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+
+  github-release:
+    name: Create GitHub Release
+    needs: build
+    runs-on: ubuntu-latest
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Download packages
+        uses: actions/download-artifact@v4
+        with:
+          pattern: packages-*
+          path: dist/
+          merge-multiple: true
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
+          files: dist/*
           generate_release_notes: true
-          files: |
-            *.whl
-            *.tar.gz
-
-
-  publish-pypi:
-    name: Publish to PyPI
-
-    needs: build
-
-    runs-on: ubuntu-latest
-
-    environment:
-      name: pypi
-      url: https://pypi.org/p/proxima-hnsw
-
-    permissions:
-      id-token: write
-
-    steps:
-      - name: Download artifacts
-        uses: actions/download-artifact@v4
-        with:
-          path: dist
-          pattern: release-*
-          merge-multiple: true
-
-      - name: Publish to PyPI
-        uses: pypa/gh-action-pypi-publish@release/v1
-        with:
-          packages-dir: dist/
