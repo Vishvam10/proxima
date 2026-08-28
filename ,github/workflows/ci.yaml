@@ -1,0 +1,155 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+
+jobs:
+  test:
+    name: Test
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra test --extra benchmark
+
+      - name: Build C++
+        run: |
+          cmake -S . -B build \
+            -DPROXIMA_BUILD_TESTS=ON \
+            -DPROXIMA_BUILD_BENCHMARKS=ON \
+            -DPROXIMA_BUILD_PYTHON=OFF
+
+          cmake --build build --parallel
+
+      - name: Run C++ tests
+        run: |
+          ctest \
+            --test-dir build \
+            --output-on-failure
+
+      - name: Run Python tests
+        run: |
+          uv run pytest tests/python -v
+
+  lint:
+    name: Lint
+
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: |
+          uv sync --extra test
+
+      - name: Install clang tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang-tidy clang-format
+
+      - name: Check formatting
+        run: |
+          make format-check
+
+      - name: Run clang-tidy
+        run: |
+          make lint
+
+  package:
+    name: Package
+
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v7
+        with:
+          enable-cache: true
+
+      - name: Set up Python
+        run: uv python install 3.12
+
+      - name: Build packages
+        run: |
+          uv build
+
+      - name: Test wheel
+        run: |
+          WHEEL=$(find dist -name '*.whl' -print -quit)
+
+          if [ -z "$WHEEL" ]; then
+            echo "No wheel found"
+            exit 1
+          fi
+
+          TEST_VENV=$(mktemp -d /tmp/proxima-wheel-test.XXXXXX)
+          trap 'rm -rf "$TEST_VENV"' EXIT
+
+          uv venv \
+            --python 3.12 \
+            "$TEST_VENV"
+
+          uv pip install \
+            --python "$TEST_VENV/bin/python" \
+            "$WHEEL"
+
+          uv pip install \
+            --python "$TEST_VENV/bin/python" \
+            "pytest>=8" \
+            "numpy>=1.24"
+
+          "$TEST_VENV/bin/python" \
+            -c "import proxima; print('Proxima imported from:', proxima.__file__)"
+
+          "$TEST_VENV/bin/python" \
+            -m pytest \
+            tests/python \
+            -v
+
+      - name: Upload packages
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-${{ matrix.os }}
+          path: dist/
