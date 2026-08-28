@@ -1,10 +1,17 @@
 ## Proxima
 
-A C++17 implementation of the [Hierarchical Navigable Small World (HNSW)](https://arxiv.org/abs/1603.09320) approximate nearest neighbor search algorithm.
-
-Proxima is designed for learning, experimentation, and performance evaluation, with a readable from-scratch implementation, configurable parameters, multiple distance metrics, SIMD acceleration, and Python bindings.
+A C++17 implementation of the [Hierarchical Navigable Small World (HNSW)](https://arxiv.org/abs/1603.09320) approximate nearest neighbor search algorithm. Proxima is designed for learning, experimentation, and performance evaluation, with a readable from-scratch implementation, configurable parameters, multiple distance metrics, SIMD acceleration, and Python bindings.
 
 Based on **"Efficient and robust approximate nearest neighbor search using Hierarchical Navigable Small World graphs"** by Yu. A. Malkov and D. A. Yashunin.
+
+### Learn More
+
+I wrote a series of blog posts documenting the implementation of Proxima and the concepts behind HNSW :
+
+- **[Part 1 : Brute Force Implementation](https://vishvamcodes.com/blog/building-an-hnsw-index-from-scratch-in-cpp-part-1)**
+- **[Part 2 : Optimizations, SIMD, etc](https://vishvamcodes.com/blog/building-an-hnsw-index-from-scratch-in-cpp-part-1)**
+- **[Part 3 : AI Debugging Gone Wrong](https://vishvamcodes.com/blog/i-asked-an-ai-to-fix-my-code-it-went-on-a-1-hour-existential-crisis/)**
+
 
 ### Features
 
