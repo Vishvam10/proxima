@@ -535,8 +535,8 @@ wheels = [
 ]
 
 [[package]]
-name = "proxima"
-version = "0.1.1"
+name = "proxima-hnsw"
+version = "0.1.7"
 source = { editable = "." }
 dependencies = [
     { name = "matplotlib" },

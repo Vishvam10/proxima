@@ -1,19 +1,13 @@
 BUILD_DIR := build
 
 RUN_DIR ?= $(shell date +%d-%m-%Y-%H-%M)
-
 RESULTS_DIR := benchmarks/results
 
-# Python used for building/testing distributable wheels.
-# Development commands continue to use the project's uv environment.
-PYTHON_VERSION ?= 3.13
-
+PYTHON_VERSION ?= 3.12
 PYTHON := uv run python
 
 CMAKE := cmake
-
 CLANG_FORMAT := clang-format
-
 CLANG_TIDY := clang-tidy
 
 CMAKE_FLAGS := \
@@ -195,17 +189,13 @@ package-test: package
 
 publish-test: package
 	@set -e; \
-	if [ -z "$(TOKEN)" ]; then \
-		echo "Usage: make publish-test TOKEN=pypi-..."; \
-		exit 1; \
-	fi; \
+	TEST_VENV=$$(mktemp -d /tmp/proxima-test.XXXXXX); \
+	trap 'rm -rf "$$TEST_VENV"' EXIT; \
 	echo "Uploading to TestPyPI..."; \
 	uv publish \
 		--token "$(TOKEN)" \
 		--publish-url https://test.pypi.org/legacy/ \
 		dist/*; \
-	TEST_VENV=$$(mktemp -d /tmp/proxima-test.XXXXXX); \
-	trap 'rm -rf "$$TEST_VENV"' EXIT; \
 	echo "Testing published package in $$TEST_VENV"; \
 	uv venv \
 		--python $(PYTHON_VERSION) \
@@ -214,7 +204,7 @@ publish-test: package
 		--python "$$TEST_VENV/bin/python" \
 		--index-url https://test.pypi.org/simple/ \
 		--extra-index-url https://pypi.org/simple/ \
-		proxima==$(shell uv run python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])'); \
+		"proxima-hnsw==$$(uv run python -c 'import tomllib; print(tomllib.load(open("pyproject.toml","rb"))["project"]["version"])')"; \
 	uv pip install \
 		--python "$$TEST_VENV/bin/python" \
 		"pytest>=8" \
@@ -226,7 +216,7 @@ publish-test: package
 		$(CURDIR)/tests/python \
 		-v; \
 	echo "TestPyPI publish and package test passed."
-
+	
 .PHONY: publish
 
 publish: release-check
