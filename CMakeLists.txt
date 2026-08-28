@@ -52,14 +52,14 @@ add_library(
 target_include_directories(
     proxima
     PUBLIC
-        $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
-        $<INSTALL_INTERFACE:include>
+    $<BUILD_INTERFACE:${PROJECT_SOURCE_DIR}/include>
+    $<INSTALL_INTERFACE:include>
 )
 
 set_target_properties(
     proxima
     PROPERTIES
-        POSITION_INDEPENDENT_CODE ON
+    POSITION_INDEPENDENT_CODE ON
 )
 
 # --------------------------------------------------
@@ -71,8 +71,8 @@ if(MSVC)
     target_compile_options(
         proxima
         PRIVATE
-            /W4
-            /permissive-
+        /W4
+        /permissive-
     )
 
 else()
@@ -80,17 +80,17 @@ else()
     target_compile_options(
         proxima
         PRIVATE
-            -Wall
-            -Wextra
-            -Wpedantic
-            -Wconversion
-            -Wsign-conversion
-            -Wshadow
-            -Wnon-virtual-dtor
-            -Wold-style-cast
-            -Woverloaded-virtual
-            -Wnull-dereference
-            -Wdouble-promotion
+        -Wall
+        -Wextra
+        -Wpedantic
+        -Wconversion
+        -Wsign-conversion
+        -Wshadow
+        -Wnon-virtual-dtor
+        -Wold-style-cast
+        -Woverloaded-virtual
+        -Wnull-dereference
+        -Wdouble-promotion
     )
 
 endif()
@@ -106,7 +106,7 @@ if(PROXIMA_ENABLE_AVX2)
         target_compile_options(
             proxima
             PRIVATE
-                /arch:AVX2
+            /arch:AVX2
         )
 
     elseif(CMAKE_CXX_COMPILER_ID MATCHES "GNU|Clang")
@@ -114,8 +114,8 @@ if(PROXIMA_ENABLE_AVX2)
         target_compile_options(
             proxima
             PRIVATE
-                -mavx2
-                -mfma
+            -mavx2
+            -mfma
         )
 
     endif()
@@ -155,8 +155,8 @@ if(PROXIMA_BUILD_TESTS)
     target_link_libraries(
         test_proxima
         PRIVATE
-            proxima
-            GTest::gtest_main
+        proxima
+        GTest::gtest_main
     )
 
     if(
@@ -167,14 +167,14 @@ if(PROXIMA_BUILD_TESTS)
         target_compile_options(
             test_proxima
             PRIVATE
-                -fsanitize=address,undefined
-                -fno-omit-frame-pointer
+            -fsanitize=address,undefined
+            -fno-omit-frame-pointer
         )
 
         target_link_options(
             test_proxima
             PRIVATE
-                -fsanitize=address,undefined
+            -fsanitize=address,undefined
         )
 
     endif()
@@ -199,7 +199,7 @@ if(PROXIMA_BUILD_BENCHMARKS)
     target_link_libraries(
         bench_proxima
         PRIVATE
-            proxima
+        proxima
     )
 
 endif()
@@ -219,31 +219,14 @@ if(PROXIMA_BUILD_PYTHON)
         REQUIRED
     )
 
-    execute_process(
-        COMMAND
-            "${Python_EXECUTABLE}" -m nanobind --cmake_dir
-        OUTPUT_VARIABLE nanobind_DIR
-        OUTPUT_STRIP_TRAILING_WHITESPACE
-        RESULT_VARIABLE nanobind_result
-    )
+    find_package(nanobind CONFIG REQUIRED)
 
-    if(NOT nanobind_result EQUAL 0)
-        message(
-            FATAL_ERROR
-            "Could not locate nanobind CMake files"
-        )
-    endif()
-
-    list(APPEND CMAKE_PREFIX_PATH "${nanobind_DIR}")
-
-    find_package(
-        nanobind
-        CONFIG
-        REQUIRED
-    )
-
+    # Note : For the time being, we do uv build --python=3.12. For some
+    # reason, STABLE_API doesn't give the abi3 thing and make package-test fails
+    # because of that. Will debug later
     nanobind_add_module(
         _proxima
+        STABLE_ABI
         bindings/python.cpp
     )
 
@@ -253,21 +236,11 @@ if(PROXIMA_BUILD_PYTHON)
             proxima
     )
 
-    target_include_directories(
-        _proxima
-        PRIVATE
-            ${PROJECT_SOURCE_DIR}/include
-    )
-
     install(
-        TARGETS
-            _proxima
-        LIBRARY
-            DESTINATION proxima
-        RUNTIME
-            DESTINATION proxima
-        ARCHIVE
-            DESTINATION proxima
+        TARGETS _proxima
+        LIBRARY DESTINATION proxima
+        RUNTIME DESTINATION proxima
+        ARCHIVE DESTINATION proxima
     )
 
 endif()

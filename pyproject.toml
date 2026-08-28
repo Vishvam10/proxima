@@ -1,22 +1,13 @@
-[build-system]
-requires = [
-    "scikit-build-core>=0.10",
-    "nanobind>=2.4",
-]
-build-backend = "scikit_build_core.build"
-
 [project]
 name = "proxima"
 version = "0.1.0"
-description = "A C++17 HNSW approximate nearest neighbor index with Python bindings"
+description = "A C++17 implementation of the HNSW approximate nearest neighbor search algorithm"
 readme = "README.md"
-requires-python = ">=3.10"
+requires-python = ">=3.12"
 license = { text = "MIT" }
-
 authors = [
     { name = "Vishvam S" }
 ]
-
 dependencies = []
 
 [project.optional-dependencies]
@@ -27,17 +18,44 @@ test = [
 
 benchmark = [
     "numpy>=1.24",
+    "pandas>=2.0",
+    "matplotlib>=3.8",
+    "catppuccin>=1.3",
     "hnswlib>=0.8",
 ]
 
+[build-system]
+requires = [
+    "scikit-build-core>=0.10",
+    "nanobind==3.0.1",
+]
+build-backend = "scikit_build_core.build"
+
 [tool.scikit-build]
 minimum-version = "build-system.requires"
-wheel.packages = ["python/proxima"]
+
+[tool.scikit-build.wheel]
+packages = ["python/proxima"]
+py-api = "cp312"
 
 [tool.scikit-build.cmake]
-version = ">=3.18"
-args = [
-    "-DPROXIMA_BUILD_PYTHON=ON",
-    "-DPROXIMA_BUILD_TESTS=OFF",
-    "-DPROXIMA_BUILD_BENCHMARKS=OFF",
+version = ">=3.16"
+
+[tool.scikit-build.cmake.define]
+PROXIMA_BUILD_TESTS = "OFF"
+PROXIMA_BUILD_BENCHMARKS = "OFF"
+PROXIMA_BUILD_PYTHON = "ON"
+
+[tool.scikit-build.sdist]
+include = [
+    "src/**",
+    "include/**",
+    "bindings/**",
+    "tests/**",
+    "benchmarks/**",
+    "CMakeLists.txt",
+    "CMakePresets.json",
+    "Makefile",
+    "README.md",
+    "LICENSE",
 ]
