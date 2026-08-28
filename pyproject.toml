@@ -1,0 +1,43 @@
+[build-system]
+requires = [
+    "scikit-build-core>=0.10",
+    "nanobind>=2.4",
+]
+build-backend = "scikit_build_core.build"
+
+[project]
+name = "proxima"
+version = "0.1.0"
+description = "A C++17 HNSW approximate nearest neighbor index with Python bindings"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+
+authors = [
+    { name = "Vishvam S" }
+]
+
+dependencies = []
+
+[project.optional-dependencies]
+test = [
+    "pytest>=8",
+    "numpy>=1.24",
+]
+
+benchmark = [
+    "numpy>=1.24",
+    "hnswlib>=0.8",
+]
+
+[tool.scikit-build]
+minimum-version = "build-system.requires"
+wheel.packages = ["python/proxima"]
+
+[tool.scikit-build.cmake]
+version = ">=3.18"
+args = [
+    "-DPROXIMA_BUILD_PYTHON=ON",
+    "-DPROXIMA_BUILD_TESTS=OFF",
+    "-DPROXIMA_BUILD_BENCHMARKS=OFF",
+]

@@ -1,15 +1,15 @@
+#include "proxima/dist/cosine.h"
+#include "proxima/dist/dispatch.h"
+#include "proxima/dist/inner_product.h"
+#include "proxima/dist/l2.h"
+#include "proxima/hnsw.h"
+
 #include <gtest/gtest.h>
-#include <vector>
 #include <random>
-
-#include "hnsw.h"
-
-#include "dist/dispatch.h"
-#include "dist/l2.h"
-#include "dist/inner_product.h"
-#include "dist/cosine.h"
+#include <vector>
 
 using std::vector;
+using namespace proxima;
 
 TEST(HnswCPU, BasicInsertAndSearch) {
     constexpr size_t N = 100;
@@ -49,8 +49,7 @@ TEST(DistanceFunctions, BasicKernels) {
     EXPECT_NEAR(cosine_scalar(a, b, 3), 1.0f, 1e-5f);
 
     EXPECT_DOUBLE_EQ(
-        computeDistance(DistanceType::L2, a, b, 3),
-        l2_scalar(a, b, 3)
+        computeDistance(DistanceType::L2, a, b, 3), l2_scalar(a, b, 3)
     );
 
     EXPECT_DOUBLE_EQ(

@@ -1,9 +1,12 @@
-#include "hnsw.h"
+#include "proxima/hnsw.h"
 
 #include <iomanip>
 #include <iostream>
 #include <random>
+
 using std::cout, std::vector;
+using namespace proxima;
+
 int main() {
     const int N = 1000;
     const int DIM = 32;

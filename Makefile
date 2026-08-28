@@ -1,163 +1,279 @@
-# ================================
-# Proxima Makefile
-# ================================
-
 BUILD_DIR := build
-BENCH_DIR := benchmarks
+RUN_DIR ?= $(shell date +%d-%m-%Y-%H-%M)
+RESULTS_DIR := benchmarks/results
+PYTHON := uv run python
 
-PYTHON := python3
-VENV_DIR := $(BENCH_DIR)/.venv
-VENV_PYTHON := $(VENV_DIR)/bin/python
-
+CMAKE := cmake
 CLANG_FORMAT := clang-format
 CLANG_TIDY := clang-tidy
 
-COMPILE_DB := $(BUILD_DIR)
+CMAKE_FLAGS := \
+	-DPROXIMA_BUILD_TESTS=ON \
+	-DPROXIMA_BUILD_BENCHMARKS=ON
 
-# Detect CPU cores for parallel jobs
-NPROC := $(shell getconf _NPROCESSORS_ONLN 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null || echo 4)
+# --------------------------------------------------
+# Default
+# --------------------------------------------------
 
-SRC := $(shell find src -name "*.cpp" ! -name "scratchpad.cpp")
-CPP_FILES := $(shell find src -name "*.cpp" -o -name "*.hpp" -o -name "*.h")
-
-.PHONY: all setup dev build rebuild clean test scratchpad venv cppbench pybench bench plot format format-check lint lint-fix help
-
-# ----------------------------
+.PHONY: all
 all: build
 
-# ----------------------------
+# --------------------------------------------------
+# Setup
+# --------------------------------------------------
+
+.PHONY: setup
 setup:
-	@bash scripts/setup.sh
-	@$(MAKE) $(VENV_PYTHON)
+	./scripts/setup.sh
 
-# ----------------------------
-dev: format lint test
+# --------------------------------------------------
+# C++ Build
+# --------------------------------------------------
 
-# ----------------------------
-build: clean
-	@if [ ! -d "$(BUILD_DIR)" ]; then \
-		echo "Configuring project..."; \
-		mkdir -p $(BUILD_DIR); \
-		cd $(BUILD_DIR) && cmake -DCMAKE_EXPORT_COMPILE_COMMANDS=ON ..; \
-	fi
-	@echo "Building project..."
-	@cmake --build $(BUILD_DIR) -j$(NPROC)
-	@ln -sf $(BUILD_DIR)/compile_commands.json .
+.PHONY: configure
+configure:
+	$(CMAKE) -S . -B $(BUILD_DIR) $(CMAKE_FLAGS)
 
-# ----------------------------
-rebuild: clean build
+.PHONY: build
+build: configure
+	$(CMAKE) --build $(BUILD_DIR) --parallel
 
-# ----------------------------
-scratchpad: clean
-	@echo "Compiling and running scratchpad..."
-	@mkdir -p $(BUILD_DIR)
-	@clang++ -std=c++17 -g -O1 \
-	-fsanitize=address,undefined \
-	-fsanitize-address-use-after-scope \
-	-fno-omit-frame-pointer \
-	-Isrc $(SRC) src/scratchpad.cpp -o $(BUILD_DIR)/scratchpad
-	@$(BUILD_DIR)/scratchpad
+.PHONY: rebuild
+rebuild:
+	rm -rf $(BUILD_DIR)
+	$(MAKE) build
 
-# ----------------------------
-test: clean build
-	@cd $(BUILD_DIR) && ctest --output-on-failure
-
-# ----------------------------
-venv:
-	@if [ ! -d "$(VENV_DIR)" ]; then \
-	    echo "Setting up Python virtual environment..."; \
-	    $(PYTHON) -m venv $(VENV_DIR); \
-	    echo "Installing benchmark dependencies..."; \
-	    $(VENV_PYTHON) -m pip install --upgrade pip; \
-	    $(VENV_PYTHON) -m pip install -r $(BENCH_DIR)/requirements.txt; \
-	else \
-	    echo "Virtual environment already exists."; \
-	fi
-
-cppbench: clean build
-	@mkdir -p $(BENCH_DIR)/results/$(RUN_DIR)
-	@./$(BUILD_DIR)/bench $(BENCH_DIR)/results/$(RUN_DIR)
-
-pybench: clean venv
-	@mkdir -p $(BENCH_DIR)/results/$(RUN_DIR)
-	@$(VENV_PYTHON) $(BENCH_DIR)/bench.py $(RUN_DIR)
-
-# ----------------------------
-bench: build venv
-	@RUN_DIR=$$(date +"%d-%m-%Y-%H-%M"); \
-	mkdir -p $(BENCH_DIR)/results/$$RUN_DIR/plots; \
-	echo "Results directory: $$RUN_DIR"; \
-	echo "Running C++ benchmarks..."; \
-	./$(BUILD_DIR)/bench $(BENCH_DIR)/results/$$RUN_DIR; \
-	echo "Running Python benchmarks..."; \
-	$(VENV_PYTHON) $(BENCH_DIR)/bench.py $$RUN_DIR; \
-	echo "Comparing results..."; \
-	$(VENV_PYTHON) $(BENCH_DIR)/compare.py $$RUN_DIR; \
-	echo "Generating plots..."; \
-	$(VENV_PYTHON) $(BENCH_DIR)/plot.py $$RUN_DIR; \
-	echo "Done. Results saved to $(BENCH_DIR)/results/$$RUN_DIR/"
-
-# ----------------------------
-plot: venv
-	@LATEST=$$(ls -dt $(BENCH_DIR)/results/*/ 2>/dev/null | head -1) && \
-	if [ -z "$$LATEST" ]; then \
-		echo "No results found. Run 'make bench' first."; \
-		exit 1; \
-	fi && \
-	RUN_DIR=$$(basename $$LATEST) && \
-	$(VENV_PYTHON) $(BENCH_DIR)/plot.py $$RUN_DIR
-
-# ----------------------------
-format:
-	@echo "Formatting C++ code..."
-	@$(CLANG_FORMAT) -i $(CPP_FILES)
-
-format-check:
-	@echo "Checking formatting..."
-	@$(CLANG_FORMAT) --dry-run --Werror $(CPP_FILES)
-
-# ----------------------------
-lint: build
-	@echo "Running clang-tidy (parallel)..."
-	@printf "%s\n" $(SRC) | xargs -P $(NPROC) -I{} $(CLANG_TIDY) -p $(COMPILE_DB) {}
-
-lint-fix: build
-	@echo "Running clang-tidy with fixes..."
-	@printf "%s\n" $(SRC) | xargs -P $(NPROC) -I{} $(CLANG_TIDY) -p $(COMPILE_DB) --fix {}
-
-# ----------------------------
+.PHONY: clean
 clean:
 	rm -rf $(BUILD_DIR)
-	rm -f compile_commands.json
 
-# ----------------------------
+# --------------------------------------------------
+# C++ Tests
+# --------------------------------------------------
+
+.PHONY: test
+test: build
+	ctest --test-dir $(BUILD_DIR) --output-on-failure
+
+# --------------------------------------------------
+# Python Environment / Package
+# --------------------------------------------------
+
+.PHONY: python
+python:
+	uv pip install -e ".[test,benchmark]"
+
+.PHONY: python-test
+python-test: python
+	uv run pytest tests/python -v
+
+.PHONY: python-all-test
+python-all-test: python
+	uv run pytest -v
+
+# --------------------------------------------------
+# Python Package
+# --------------------------------------------------
+
+.PHONY: package
+package:
+	rm -rf dist
+	uv build
+
+.PHONY: wheel
+wheel:
+	rm -rf dist
+	uv build --wheel
+
+.PHONY: sdist
+sdist:
+	rm -rf dist
+	uv build --sdist
+
+.PHONY: package-check
+package-check: package
+	uvx twine check dist/*
+
+# Build and test the actual wheel in a clean environment.
+.PHONY: package-test
+package-test: package-check
+	rm -rf /tmp/proxima-package-test
+	uv venv /tmp/proxima-package-test
+	uv pip install \
+		--python /tmp/proxima-package-test/bin/python \
+		dist/*.whl
+	uv pip install \
+		--python /tmp/proxima-package-test/bin/python \
+		pytest numpy
+	/tmp/proxima-package-test/bin/python -c \
+		"import proxima; print(proxima); print(proxima.HnswCPU)"
+	/tmp/proxima-package-test/bin/python -m pytest tests/python -v
+
+# --------------------------------------------------
+# C++ Benchmarks
+# --------------------------------------------------
+
+.PHONY: cppbench
+cppbench: build
+	mkdir -p $(RESULTS_DIR)/$(RUN_DIR)
+	./$(BUILD_DIR)/bench_proxima $(RESULTS_DIR)/$(RUN_DIR)
+
+# --------------------------------------------------
+# Python Benchmarks
+# --------------------------------------------------
+
+.PHONY: pybindings-bench
+pybindings-bench: python
+	mkdir -p $(RESULTS_DIR)/$(RUN_DIR)
+	$(PYTHON) benchmarks/bench_proxima_pybinding.py \
+		$(RESULTS_DIR)/$(RUN_DIR)
+
+.PHONY: pybench
+pybench: python
+	mkdir -p $(RESULTS_DIR)/$(RUN_DIR)
+	$(PYTHON) benchmarks/bench_hnswlib.py \
+		$(RESULTS_DIR)/$(RUN_DIR)
+
+# --------------------------------------------------
+# Full Benchmarks
+# --------------------------------------------------
+
+.PHONY: bench
+bench:
+	$(MAKE) build
+	$(MAKE) python
+	mkdir -p $(RESULTS_DIR)/$(RUN_DIR)
+
+	$(MAKE) cppbench RUN_DIR=$(RUN_DIR)
+	$(MAKE) pybindings-bench RUN_DIR=$(RUN_DIR)
+	$(MAKE) pybench RUN_DIR=$(RUN_DIR)
+
+	$(PYTHON) benchmarks/compare.py \
+		$(RESULTS_DIR)/$(RUN_DIR)
+
+	$(PYTHON) benchmarks/plot.py \
+		$(RESULTS_DIR)/$(RUN_DIR)
+
+# --------------------------------------------------
+# Plots / Reports
+# --------------------------------------------------
+
+.PHONY: plot
+plot:
+	$(PYTHON) benchmarks/plot.py \
+		$(RESULTS_DIR)/$(RUN_DIR)
+
+.PHONY: compare
+compare:
+	$(PYTHON) benchmarks/compare.py \
+		$(RESULTS_DIR)/$(RUN_DIR)
+
+# --------------------------------------------------
+# Formatting
+# --------------------------------------------------
+
+CPP_FILES := $(shell find src include tests/cpp benchmarks \
+	-name '*.cpp' -o -name '*.h' -o -name '*.hpp')
+
+.PHONY: format
+format:
+	$(CLANG_FORMAT) -i $(CPP_FILES)
+
+.PHONY: format-check
+format-check:
+	@$(CLANG_FORMAT) --dry-run --Werror $(CPP_FILES)
+
+# --------------------------------------------------
+# Static Analysis
+# --------------------------------------------------
+
+.PHONY: lint
+lint: build
+	$(CLANG_TIDY) \
+		-p $(BUILD_DIR) \
+		$$(find src -name '*.cpp')
+
+.PHONY: lint-fix
+lint-fix: build
+	$(CLANG_TIDY) \
+		-p $(BUILD_DIR) \
+		--fix \
+		$$(find src -name '*.cpp')
+
+# --------------------------------------------------
+# CI
+# --------------------------------------------------
+
+.PHONY: ci
+ci:
+	$(MAKE) format-check
+	$(MAKE) build
+	$(MAKE) test
+	$(MAKE) python-test
+	$(MAKE) package-test
+
+# --------------------------------------------------
+# Release
+# --------------------------------------------------
+
+.PHONY: release-check
+release-check:
+	@echo "Running release checks..."
+	$(MAKE) format-check
+	$(MAKE) build
+	$(MAKE) test
+	$(MAKE) python-test
+	$(MAKE) package-test
+	$(MAKE) package-check
+	@echo "Release checks passed."
+
+# --------------------------------------------------
+# Help
+# --------------------------------------------------
+
+.PHONY: help
 help:
-	@echo "Build & Development"
-	@echo "-------------------"
-	@echo "make setup        - Setup dev environment"
-	@echo "make build        - Build project (CMake)"
-	@echo "make rebuild      - Clean and rebuild"
-	@echo "make dev          - Format + lint + test"
 	@echo ""
-	@echo "Testing"
-	@echo "-------"
-	@echo "make test         - Run tests"
-	@echo "make scratchpad   - Compile and run scratchpad (with sanitizers)"
+	@echo "Proxima"
 	@echo ""
-	@echo "Benchmarks"
-	@echo "----------"
-	@echo "make cppbench     - Run C++ benchmark (sanitizer-free)"
-	@echo "make pybench      - Run Python benchmark"
-	@echo "make bench        - Run full benchmark suite"
-	@echo "make plot         - Plot latest results"
+	@echo "Build:"
+	@echo "  make setup                 Install development tools"
+	@echo "  make configure             Configure CMake"
+	@echo "  make build                 Build C++ project"
+	@echo "  make rebuild               Clean rebuild"
+	@echo "  make clean                 Remove build directory"
 	@echo ""
-	@echo "Code Quality"
-	@echo "------------"
-	@echo "make format       - Format code"
-	@echo "make format-check - Check formatting"
-	@echo "make lint         - Run clang-tidy"
-	@echo "make lint-fix     - Run clang-tidy and apply fixes"
+	@echo "Tests:"
+	@echo "  make test                  Run C++ tests"
+	@echo "  make python-test           Run Python tests"
+	@echo "  make python-all-test       Run all Python tests"
+	@echo "  make ci                    Run full CI checks"
 	@echo ""
-	@echo "Maintenance"
-	@echo "-----------"
-	@echo "make clean        - Remove build artifacts"
+	@echo "Python:"
+	@echo "  make python                Install Python package/dependencies"
+	@echo "  make package               Build wheel + sdist"
+	@echo "  make wheel                 Build wheel only"
+	@echo "  make sdist                 Build source distribution"
+	@echo "  make package-check         Validate distributions"
+	@echo "  make package-test          Test actual wheel in clean venv"
+	@echo ""
+	@echo "Benchmarks:"
+	@echo "  make cppbench              Run C++ benchmark"
+	@echo "  make pybindings-bench      Run Python bindings benchmark"
+	@echo "  make pybench               Run hnswlib benchmark"
+	@echo "  make bench                 Run complete benchmark suite"
+	@echo "  make compare               Generate comparison"
+	@echo "  make plot                  Generate plots"
+	@echo ""
+	@echo "Code Quality:"
+	@echo "  make format                Format C++ code"
+	@echo "  make format-check          Check formatting"
+	@echo "  make lint                  Run clang-tidy"
+	@echo "  make lint-fix              Run clang-tidy with fixes"
+	@echo ""
+	@echo "Release:"
+	@echo "  make release-check         Run all release checks"
+	@echo ""
+	@echo "Benchmark example:"
+	@echo "  make bench RUN_DIR=my-run"
+	@echo ""
